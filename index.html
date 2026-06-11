@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>新版 補助決策計算器 (雲端同步與PWA離線版)</title>
+  
+  <!-- 加入這行：綁定 App 資訊的 manifest.json -->
+  <link rel="manifest" href="manifest.json">
+
+  <style>
+    :root {
+      --primary-color: #2b6cb0; --bg-color: #f0f4f8; --card-bg: #ffffff; --border-color: #cbd5e0;
+      --text-main: #2d3748; --ltc-color: #2f855a; --dis-color: #2b6cb0; --danger-color: #e53e3e; --quota-color: #c53030;
+    }
+    * { box-sizing: border-box; font-family: "Microsoft JhengHei", sans-serif; }
+    body { margin: 0; padding: 0; background-color: #a0aec0; display: flex; justify-content: center; }
+
+    .app-container { width: 100%; max-width: 480px; min-height: 100vh; background-color: var(--bg-color); position: relative; padding-bottom: 160px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+    .header { background-color: var(--primary-color); color: white; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; flex-wrap: wrap; gap: 8px;}
+    .header-btns { display: flex; gap: 6px; }
+    .btn-action { background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight:bold;}
+    .btn-report { background: #edf2f7; color: var(--primary-color); }
+    .btn-sync { background: #fefcbf; color: #c05621; }
+
+    .section { padding: 16px; border-bottom: 1px solid var(--border-color); background: white; }
+    .identity-row { display: flex; gap: 12px; } .identity-col { flex: 1; }
+    label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: var(--text-main); }
+    select { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 14px; background-color: white; margin-bottom: 8px; }
+    .group-selector { background-color: #f0fff4; border: 2px solid #68d391; font-weight: bold; color: #276749; }
+
+    .btn-open-catalog { width: 100%; background: var(--primary-color); color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; font-size: 15px; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 2px 4px rgba(43,108,176,0.3);}
+
+    .item-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; margin: 16px; }
+    .item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; border-bottom: 1px solid #edf2f7; padding-bottom: 8px; }
+    .item-title-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .item-title { font-size: 15px; font-weight: bold; color: var(--text-main); }
+    .qty-control { display: flex; align-items: center; background: #edf2f7; padding: 4px 8px; border-radius: 6px; font-size: 13px; }
+    .qty-control input { width: 45px; border: 1px solid #cbd5e0; border-radius: 4px; padding: 2px 4px; text-align: center; margin: 0 4px; font-weight: bold; }
+    
+    .btn-delete { background: #fee2e2; border: 1px solid #fca5a5; color: var(--danger-color); font-size: 12px; font-weight:bold; cursor: pointer; padding: 4px 10px; border-radius: 4px; white-space: nowrap; }
+    .btn-delete-group { background: #fff5f5; border: 1px solid #feb7b7; color: var(--danger-color); font-size: 12px; font-weight:bold; cursor: pointer; padding: 4px 10px; border-radius: 4px; }
+
+    .compare-grid { display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 6px; margin-bottom: 10px; }
+    .compare-box { padding: 8px 4px; border-radius: 6px; background: #fafafa; border: 1px solid #e2e8f0; text-align: center; display: flex; flex-direction: column; justify-content: center; position: relative; transition: all 0.2s;}
+    .compare-box.diff-box { background: #faf5ff; border-color: #e9d8fd; }
+    .compare-box.forbidden { background: #edf2f7; border: 1px dashed #a0aec0; color: #a0aec0; }
+    
+    .compare-box.selected-track-dis { border: 2px solid var(--dis-color); background: #ebf8ff; opacity: 1 !important; box-shadow: 0 2px 4px rgba(43,108,176,0.1);}
+    .compare-box.selected-track-ltc { border: 2px solid var(--ltc-color); background: #f0fff4; opacity: 1 !important; box-shadow: 0 2px 4px rgba(47,133,90,0.1);}
+    
+    .box-title { font-size: 11px; font-weight: bold; margin-bottom: 4px; color: #718096; }
+    .amount { font-size: 15px; font-weight: bold; }
+    
+    .text-dis { color: var(--dis-color); } .text-ltc { color: var(--ltc-color); }
+    .text-diff-pos { color: var(--ltc-color); font-weight: bold; } .text-diff-neg { color: var(--dis-color); font-weight: bold; } 
+
+    .track-selector-row { background: #edf2f7; padding: 8px 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+    .track-selector-options { display: flex; gap: 12px; align-items: center; }
+    .track-selector-options label { margin: 0; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+    .track-selector-options input:disabled + span { color: #a0aec0; text-decoration: line-through; }
+    .quota-info-inline { font-size: 12px; color: var(--quota-color); font-weight: bold; }
+
+    /* ====== 多彩主題統包 ====== */
+    .module-group { border: 2px dashed; border-radius: 8px; padding: 12px; margin: 16px; transition: all 0.3s;}
+    .module-header { padding-bottom: 8px; margin-bottom: 12px; border-bottom: 1px solid; display: flex; justify-content: space-between; align-items: center; }
+    .module-header span { font-weight: bold; font-size: 15px; }
+    .module-control-panel { background: white; border: 1px solid; border-radius: 6px; padding: 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .module-group .item-card { margin: 0 0 12px 0; border: 1px solid; }
+    
+    .theme-blue { background: #ebf8ff; border-color: #90cdf4; } .theme-blue .module-header { border-bottom-color: #bee3f8; } .theme-blue .module-header span { color: #2c5282; } .theme-blue .module-control-panel { border-color: #bee3f8; } .theme-blue .item-card { border-color: #bee3f8; }
+    .theme-green { background: #f0fff4; border-color: #9ae6b4; } .theme-green .module-header { border-bottom-color: #c6f6d5; } .theme-green .module-header span { color: #276749; } .theme-green .module-control-panel { border-color: #c6f6d5; } .theme-green .item-card { border-color: #c6f6d5; }
+    .theme-purple { background: #faf5ff; border-color: #d6bcfa; } .theme-purple .module-header { border-bottom-color: #e9d8fd; } .theme-purple .module-header span { color: #553c9a; } .theme-purple .module-control-panel { border-color: #e9d8fd; } .theme-purple .item-card { border-color: #e9d8fd; }
+    .theme-orange { background: #fffaf0; border-color: #fbd38d; } .theme-orange .module-header { border-bottom-color: #feebc8; } .theme-orange .module-header span { color: #c05621; } .theme-orange .module-control-panel { border-color: #feebc8; } .theme-orange .item-card { border-color: #feebc8; }
+
+    .summary-footer { position: fixed; bottom: 0; width: 100%; max-width: 480px; background: white; border-top: 1px solid var(--border-color); padding: 12px 16px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 10; }
+    .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: var(--text-main); }
+    .summary-item { display: flex; justify-content: space-between; background: #f7fafc; padding: 6px 8px; border-radius: 4px; }
+    .summary-total { grid-column: span 2; display: flex; justify-content: space-between; align-items: center; background: #fff5f5; border: 1px solid #fed7d7; padding: 8px 12px; border-radius: 6px; font-weight: bold; color: var(--danger-color); font-size: 16px; }
+
+    .warning-banner { background-color: #c53030; color: white; font-size: 13px; font-weight: bold; padding: 8px; text-align: center; border-radius: 6px; margin-bottom: 8px; }
+
+    /* Modals */
+    .catalog-modal, .report-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 200; justify-content: center; align-items: center; padding: 16px; }
+    .catalog-content, .report-content { background: white; width: 100%; max-width: 450px; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+    .catalog-content { height: 85vh; } .report-content { max-width: 600px; height: auto; max-height: 90vh; overflow-y: auto; padding: 20px;}
+    .catalog-header, .report-header { padding: 16px; border-bottom: 1px solid var(--border-color); background: #f7fafc;}
+    .close-catalog-btn { background: none; border: none; font-size: 20px; color: #a0aec0; cursor: pointer; float: right;}
+    .search-box { width: 100%; padding: 10px 14px; border-radius: 8px; border: 2px solid #e2e8f0; font-size: 15px; margin-top:10px; }
+    .catalog-list { flex: 1; overflow-y: auto; padding: 8px 16px; background: #fff;}
+    .catalog-item { display: flex; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid #edf2f7; cursor: pointer; }
+    .catalog-item input[type="checkbox"] { margin-top: 3px; margin-right: 12px; width: 18px; height: 18px; cursor: pointer;}
+    .catalog-footer { padding: 16px; border-top: 1px solid var(--border-color); display: flex; gap: 12px;}
+    .btn-catalog-confirm { flex: 1; padding: 12px; border-radius: 8px; border: none; background: var(--primary-color); font-weight: bold; color: white; cursor: pointer;}
+    .report-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px; }
+    .report-table th, .report-table td { border: 1px solid #cbd5e0; padding: 8px; text-align: left; }
+    .report-table th { background: #edf2f7; font-weight: bold; } .report-table td.num { text-align: right; }
+    @media print { body * { visibility: hidden; } .report-modal { display: block !important; position: absolute; left: 0; top: 0; background: none; padding: 0; overflow: visible;} .report-content { width: 100%; max-width: none; box-shadow: none; padding: 0; } .report-content * { visibility: visible; } .no-print { display: none !important; } }
+    
+    #sync-status { font-size: 11px; color: #a0aec0; width: 100%; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    <div class="header">
+      <span>📝 補助決策計算器</span>
+      <div class="header-btns">
+        <button class="btn-action btn-sync" onclick="syncData()">🔄 雲端更新</button>
+        <button class="btn-action btn-report" onclick="openReport()">📄 報表</button>
+        <button class="btn-action" onclick="clearAll()">清除</button>
+      </div>
+      <div id="sync-status">目前使用本機離線資料 (請點擊雲端更新)</div>
+    </div>
+
+    <div class="section">
+      <div class="identity-row">
+        <div class="identity-col">
+          <label>🟦 身障身分</label>
+          <select id="dis-status" onchange="updateUI()">
+            <option value="none">無資格</option><option value="general">一般戶</option><option value="midLow">中低收</option><option value="low">低收</option>
+          </select>
+        </div>
+        <div class="identity-col">
+          <label>🟩 長照身分</label>
+          <select id="ltc-status" onchange="updateUI()">
+            <option value="none">無資格</option><option value="class3">第三類(一般)</option><option value="class2">第二類(中低)</option><option value="class1">第一類(低收)</option>
+          </select>
+          <select id="ltc-group" class="group-selector" onchange="updateUI()" style="display: none;">
+            <option value="1">第一組 (額度 4萬)</option><option value="2">第二組 (限項目 / 額度 2萬)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="section" style="border-bottom: none; padding-bottom: 8px;">
+      <button class="btn-open-catalog" onclick="openCatalog()">➕ 瀏覽與新增補助項目</button>
+    </div>
+
+    <div id="cart-container"></div>
+
+    <div class="summary-footer">
+      <div id="warning-container"></div>
+      <div class="summary-grid">
+        <div class="summary-item"><span>🟦 身障總計:</span> <strong id="sum-dis">$0</strong></div>
+        <div class="summary-item"><span>🟩 長照總計:</span> <strong id="sum-ltc">$0</strong></div>
+        <div class="summary-item" style="grid-column: span 2; background: #edf2f7;">
+          <span>⚠️ 長照佔用 (總額度):</span> <span style="font-size: 12px; font-weight:bold;"><span id="quota-display" class="text-ltc"></span></span>
+        </div>
+        <div class="summary-total"><span>💰 合併總補助金額:</span> <span id="sum-total">$0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="catalog-modal" id="catalog-modal">
+    <div class="catalog-content">
+      <div class="catalog-header">
+        <h3 style="margin:0; font-size:16px;">選擇需求項目 <button class="close-catalog-btn" onclick="closeCatalog()">✖</button></h3>
+        <input type="text" id="catalog-search" class="search-box" placeholder="🔍 搜尋名稱或代碼" onkeyup="filterCatalog()">
+      </div>
+      <div class="catalog-list" id="catalog-list"></div>
+      <div class="catalog-footer"><button class="btn-catalog-confirm" onclick="addSelectedItems()">確認加入選取項目</button></div>
+    </div>
+  </div>
+
+  <div class="report-modal" id="report-modal">
+    <div class="report-content">
+      <div class="report-header">
+        <h2 style="margin:0; color:#2b6cb0;">補助試算報表</h2>
+        <div class="no-print"><button style="padding:6px 12px; cursor:pointer;" onclick="window.print()">🖨️ 列印</button> <button style="padding:6px 12px; cursor:pointer; color:red;" onclick="closeReport()">✖ 關閉</button></div>
+      </div>
+      <div style="margin-bottom: 12px; font-size: 14px;"><strong>身分：</strong> <span id="report-id-text"></span></div>
+      <table class="report-table">
+        <thead><tr><th>項目名稱</th><th style="width:50px; text-align:center;">數量</th><th style="width:50px; text-align:center;">管道</th><th style="text-align:right;">核定補助</th><th style="text-align:right;">長照額度</th></tr></thead>
+        <tbody id="report-tbody"></tbody>
+      </table>
+      <div style="background: #f7fafc; padding: 12px; border-radius: 6px; font-size: 14px;">
+        <div style="display:flex; justify-content:space-between; margin-bottom: 6px;"><span>身障補助：</span> <span id="report-sum-dis" style="color:var(--dis-color); font-weight:bold;">$0</span></div>
+        <div style="display:flex; justify-content:space-between; margin-bottom: 6px;"><span>長照補助：</span> <span id="report-sum-ltc" style="color:var(--ltc-color); font-weight:bold;">$0</span></div>
+        <div style="display:flex; justify-content:space-between; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #cbd5e0;"><span>長照額度：</span> <span id="report-quota" style="color:var(--quota-color); font-weight:bold;">$0</span></div>
+        <div style="display:flex; justify-content:space-between; font-size: 16px; font-weight: bold; color: var(--danger-color);"><span>合併總額：</span> <span id="report-sum-total">$0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // ⬇️ 第一步：將您的 Google 試算表 ID 貼在下方 ⬇️
+    // ==========================================
+    const GOOGLE_SHEET_ID = '1s3uu7OYB-Jsz5nYqNR-96zsrF26ofbMWjTL3bLbVoHA'; 
+
+    let database = {}; 
+    let cart = [];
+    let groupTracks = {};
+    const themeColors = ['theme-blue', 'theme-green', 'theme-purple', 'theme-orange'];
+
+    function initApp() {
+      const cachedData = localStorage.getItem('subsidyDatabase');
+      const lastSync = localStorage.getItem('subsidyLastSync');
+      if (cachedData) {
+        database = JSON.parse(cachedData);
+        if(lastSync) document.getElementById('sync-status').innerText = `✅ 已載入離線資料 (上次更新: ${lastSync})`;
+      } else {
+        document.getElementById('sync-status').innerText = '⚠️ 尚無資料，請點擊「雲端更新」獲取法規資料';
+      }
+    }
+
+    async function syncData() {
+      if(GOOGLE_SHEET_ID === 'YOUR_GOOGLE_SHEET_ID_HERE') {
+        alert("工程師提醒：請先在程式碼中填入您的 Google 試算表 ID 喔！");
+        return;
+      }
+      
+      document.getElementById('sync-status').innerText = '⏳ 正在從雲端抓取最新資料...';
+      const url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/export?format=csv`;
+
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Network response was not ok');
+        const csvText = await response.text();
+        
+        parseCSV(csvText);
+        
+        const now = new Date();
+        const timeString = `${now.getMonth()+1}/${now.getDate()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+        localStorage.setItem('subsidyLastSync', timeString);
+        document.getElementById('sync-status').innerText = `✅ 同步成功！(最新版本: ${timeString})`;
+        alert("法規資料已成功從 Google 雲端同步！");
+        
+      } catch (error) {
+        document.getElementById('sync-status').innerText = '❌ 同步失敗，請檢查網路或試算表權限。';
+        alert('無法連接到 Google 試算表，請確認您的試算表已設定為「知道連結的人均可查看」。\n目前將繼續使用舊版離線資料。');
+      }
+    }
+
+    function parseCSV(csvText) {
+      const rows = csvText.split('\n').map(row => row.replace('\r', ''));
+      const newDatabase = {};
+
+      for (let i = 2; i < rows.length; i++) {
+        const cols = rows[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+        if (cols.length < 3) continue; 
+
+        let ltcCode = cols[0] ? cols[0].trim().replace(/"/g, '') : '';
+        let disCode = cols[1] ? cols[1].trim().replace(/"/g, '') : '';
+        let name = cols[2] ? cols[2].trim().replace(/"/g, '') : '';
+        let moduleGroup = cols[3] ? cols[3].trim().replace(/"/g, '') : '';
+
+        let uid = ltcCode;
+        if (!uid) uid = disCode ? 'D' + disCode : 'SYS_' + i;
+
+        let disGen = parseInt(cols[4]) || 0;
+        let disMid = parseInt(cols[5]) || 0;
+        let disLow = parseInt(cols[6]) || 0;
+        let ltc3 = parseInt(cols[7]) || 0;
+        let ltc2 = parseInt(cols[8]) || 0;
+        let ltc1 = parseInt(cols[9]) || 0;
+
+        let group2 = cols[10] && cols[10].trim().toUpperCase() === 'Y';
+        let pricingRule = cols[11] ? cols[11].trim() : '';
+
+        newDatabase[uid] = {
+           name: name,
+           unit: "組", 
+           moduleGroup: moduleGroup || null,
+           moduleName: moduleGroup ? `📦 ${moduleGroup} (統包)` : null,
+           dis: { general: disGen, midLow: disMid, low: disLow },
+           ltc: { class3: ltc3, class2: ltc2, class1: ltc1 },
+           isGroup2Allowed: group2,
+           pricingRule: pricingRule,
+           displayCode: ltcCode || disCode || '' 
+        };
+      }
+
+      localStorage.setItem('subsidyDatabase', JSON.stringify(newDatabase));
+      database = newDatabase;
+      cart = []; 
+      updateUI();
+    }
+
+    function calculateGrant(item, track, quantity) {
+      const disStatus = document.getElementById('dis-status').value;
+      const ltcStatus = document.getElementById('ltc-status').value;
+      let unitPrice = 0; let effectiveQty = quantity;
+      if (track === 'dis') {
+        unitPrice = (disStatus !== 'none' && item.dis && item.dis[disStatus]) ? item.dis[disStatus] : 0;
+      } else if (track === 'ltc') {
+        unitPrice = (ltcStatus !== 'none' && item.ltc && item.ltc[ltcStatus]) ? item.ltc[ltcStatus] : 0;
+        if (item.pricingRule === 'LTC_FIXED') effectiveQty = 1;
+      }
+      return unitPrice * effectiveQty; 
+    }
+
+    function calculateQuotaUsed(item, track, quantity) {
+      if (track === 'ltc' && item.ltc && item.ltc.class1) {
+        let effectiveQty = quantity;
+        if (item.pricingRule === 'LTC_FIXED') effectiveQty = 1;
+        return item.ltc.class1 * effectiveQty;
+      }
+      return 0;
+    }
+
+    function formatDiff(diff) {
+      if (diff > 0) return `<span class="text-diff-pos">+$${diff.toLocaleString()} <span style="font-size:12px; font-weight:normal;">(偏長)</span></span>`;
+      if (diff < 0) return `<span class="text-diff-neg">-$${Math.abs(diff).toLocaleString()} <span style="font-size:12px; font-weight:normal;">(偏身)</span></span>`;
+      return `<span style="color:gray;">$0 <span style="font-size:12px; font-weight:normal;">(皆可)</span></span>`;
+    }
+
+    function openCatalog() {
+      if(Object.keys(database).length === 0) { alert("請先點擊「🔄 雲端更新」獲取法規資料！"); return; }
+      const listContainer = document.getElementById('catalog-list');
+      document.getElementById('catalog-search').value = '';
+      listContainer.innerHTML = '';
+      const ltcStatus = document.getElementById('ltc-status').value;
+      const ltcGroup = document.getElementById('ltc-group').value;
+      const availableIds = Object.keys(database).filter(id => !cart.find(c => c.id === id));
+      
+      if (availableIds.length === 0) { listContainer.innerHTML = `<div style="text-align:center; padding: 20px; color:#a0aec0;">皆已加入清單！</div>`; } 
+      else {
+        availableIds.forEach(id => {
+          const db = database[id];
+          const isBlocked = (ltcStatus !== 'none' && ltcGroup === '2' && db.isGroup2Allowed !== true);
+          listContainer.innerHTML += `
+            <label class="catalog-item" data-search="${db.displayCode.toLowerCase()} ${db.name.toLowerCase()}">
+              <input type="checkbox" class="catalog-checkbox" value="${id}">
+              <div style="flex:1;">
+                <div style="font-size:15px; font-weight:bold; color:var(--text-main);">${db.name} <span style="font-size:12px; font-weight:normal; color:#a0aec0;">[${db.displayCode}]</span></div>
+                ${db.moduleName ? `<div style="font-size:12px; color:#2b6cb0; margin-top:2px;">屬: ${db.moduleName}</div>` : ''}
+                ${isBlocked ? `<div style="font-size:12px; color:#e53e3e; font-weight:bold; margin-top:2px;">🚫 長照二組不給付</div>` : ''}
+              </div>
+            </label>`;
+        });
+      }
+      document.getElementById('catalog-modal').style.display = 'flex';
+    }
+    function closeCatalog() { document.getElementById('catalog-modal').style.display = 'none'; }
+    function filterCatalog() {
+      const keyword = document.getElementById('catalog-search').value.toLowerCase();
+      document.querySelectorAll('.catalog-item').forEach(item => {
+        item.style.display = item.getAttribute('data-search').includes(keyword) ? 'flex' : 'none';
+      });
+    }
+    function addSelectedItems() {
+      document.querySelectorAll('.catalog-checkbox:checked').forEach(cb => {
+        const db = database[cb.value];
+        cart.push({ id: cb.value, track: 'ltc', uid: "uid_" + Date.now() + Math.random(), quantity: 1 });
+        if (db.moduleGroup && !groupTracks[db.moduleGroup]) { groupTracks[db.moduleGroup] = 'ltc'; }
+      });
+      closeCatalog(); updateUI();
+    }
+
+    function removeItem(uid) { cart = cart.filter(i => i.uid !== uid); updateUI(); }
+    function removeModuleGroup(groupId) {
+      if (confirm("確定要刪除整個群組內的所有項目嗎？")) {
+        cart = cart.filter(cartItem => database[cartItem.id].moduleGroup !== groupId);
+        delete groupTracks[groupId];
+        updateUI();
+      }
+    }
+    function changeETrack(uid, track) { cart.find(i => i.uid === uid).track = track; updateUI(); }
+    function changeGroupTrack(groupId, track) { groupTracks[groupId] = track; updateUI(); }
+    function updateQuantity(uid, qty) {
+      const item = cart.find(i => i.uid === uid);
+      if(item) { item.quantity = Math.max(1, parseInt(qty, 10) || 1); updateUI(); }
+    }
+
+    function updateUI() {
+      const ltcStatusEl = document.getElementById('ltc-status'), ltcGroupEl = document.getElementById('ltc-group'), disStatus = document.getElementById('dis-status').value;
+      const ltcStatus = ltcStatusEl.value;
+      ltcGroupEl.style.display = (ltcStatus === 'none') ? 'none' : 'block';
+      const ltcGroup = ltcGroupEl.value;
+
+      const container = document.getElementById('cart-container');
+      let sumDis = 0, sumLtc = 0, ltcTotalQuota = 0, disItemCount = 0;
+      
+      const independentItems = [];
+      const groupedItems = {};
+
+      cart.forEach(cartItem => {
+        const db = database[cartItem.id];
+        if (db.moduleGroup) {
+          if (!groupedItems[db.moduleGroup]) groupedItems[db.moduleGroup] = [];
+          groupedItems[db.moduleGroup].push(cartItem);
+        } else {
+          independentItems.push(cartItem);
+        }
+      });
+
+      let html = "";
+
+      independentItems.forEach(cartItem => {
+        const db = database[cartItem.id];
+        let ltcAllowed = true;
+        if (ltcStatus === 'none' || (ltcGroup === '2' && !db.isGroup2Allowed)) ltcAllowed = false;
+        if (!ltcAllowed && cartItem.track === 'ltc') cartItem.track = 'dis';
+
+        const grantDis = calculateGrant(db, 'dis', cartItem.quantity);
+        const grantLtc = ltcAllowed ? calculateGrant(db, 'ltc', cartItem.quantity) : 0;
+        const itemQuota = ltcAllowed ? calculateQuotaUsed(db, 'ltc', cartItem.quantity) : 0;
+        const diff = grantLtc - grantDis;
+        
+        if(cartItem.track === 'dis') { sumDis += grantDis; disItemCount += cartItem.quantity; } 
+        if(cartItem.track === 'ltc' && ltcAllowed) { sumLtc += grantLtc; ltcTotalQuota += itemQuota; }
+
+        html += `
+          <div class="item-card">
+            <div class="item-header">
+              <div class="item-title-group"><span class="item-title">${db.name}</span><div class="qty-control">數量: <input type="number" min="1" value="${cartItem.quantity}" onchange="updateQuantity('${cartItem.uid}', this.value)"></div></div>
+              <button class="btn-delete" onclick="removeItem('${cartItem.uid}')">✖ 刪除</button>
+            </div>
+            
+            <div class="track-selector-row" style="margin-bottom: 10px;">
+              <div class="track-selector-options"><span>👉 管道:</span><label><input type="radio" name="track_${cartItem.uid}" ${cartItem.track==='dis'?'checked':''} ${disStatus==='none'?'disabled':''} onchange="changeETrack('${cartItem.uid}', 'dis')">身障</label><label><input type="radio" name="track_${cartItem.uid}" ${cartItem.track==='ltc'?'checked':''} ${!ltcAllowed?'disabled':''} onchange="changeETrack('${cartItem.uid}', 'ltc')">長照</label></div>
+              ${cartItem.track === 'ltc' && itemQuota > 0 ? `<div class="quota-info-inline">扣額度: $${itemQuota.toLocaleString()}</div>` : ''}
+            </div>
+
+            <div class="compare-grid">
+              <div class="compare-box ${cartItem.track === 'dis' ? 'selected-track-dis' : ''}" style="${cartItem.track !== 'dis' ? 'opacity: 0.5;' : ''}"><div class="box-title text-dis">身障</div><div class="amount">${grantDis > 0 ? '$'+grantDis.toLocaleString() : '-'}</div></div>
+              ${ltcAllowed ? `
+                <div class="compare-box ${cartItem.track === 'ltc' ? 'selected-track-ltc' : ''}" style="${cartItem.track !== 'ltc' ? 'opacity: 0.5;' : ''}"><div class="box-title text-ltc">長照</div><div class="amount">${grantLtc > 0 ? '$'+grantLtc.toLocaleString() : '-'}</div></div>
+                <div class="compare-box diff-box" style="${cartItem.track === 'ltc' ? 'opacity: 1;' : 'opacity: 0.5;'}"><div class="box-title">差額</div><div class="amount">${formatDiff(diff)}</div></div>
+              ` : `<div class="compare-box forbidden" style="grid-column: span 2;"><div style="font-size:13px; font-weight:bold;">🚫 不給付</div></div>`}
+            </div>
+          </div>`;
+      });
+
+      let themeIndex = 0; 
+      for (const groupId in groupedItems) {
+        const items = groupedItems[groupId];
+        const groupName = database[items[0].id].moduleName || "群組模組";
+        const currentTheme = themeColors[themeIndex % themeColors.length]; 
+        themeIndex++;
+        
+        let currentTrack = groupTracks[groupId] || 'ltc';
+        if (currentTrack === 'dis' && disStatus === 'none') currentTrack = 'ltc';
+        if (currentTrack === 'ltc' && ltcStatus === 'none') currentTrack = 'dis';
+        groupTracks[groupId] = currentTrack; 
+
+        if (currentTrack === 'dis') disItemCount += 1; 
+
+        let totalGDis = 0, totalGLtc = 0, gTotalQuota = 0, isAnyBlockedInLTC = false;
+
+        items.forEach(cartItem => {
+          const db = database[cartItem.id];
+          totalGDis += calculateGrant(db, 'dis', cartItem.quantity); 
+          if (ltcGroup === '2' && db.isGroup2Allowed !== true) { isAnyBlockedInLTC = true; } 
+          else { totalGLtc += calculateGrant(db, 'ltc', cartItem.quantity); gTotalQuota += calculateQuotaUsed(db, 'ltc', cartItem.quantity); }
+        });
+        
+        const totalGDiff = totalGLtc - totalGDis;
+
+        html += `
+          <div class="module-group ${currentTheme}">
+            <div class="module-header">
+              <span>${groupName}</span>
+              <button class="btn-delete-group" onclick="removeModuleGroup('${groupId}')">✖ 刪除群組</button>
+            </div>
+            
+            <div class="module-control-panel">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
+                <div style="font-size: 13px; line-height: 1.6;">
+                  <span style="color:var(--dis-color); font-weight:bold;">身障總計: $${totalGDis.toLocaleString()}</span><br>
+                  <span style="color:var(--ltc-color); font-weight:bold;">長照總計: $${totalGLtc.toLocaleString()}</span>
+                </div>
+                <div style="text-align: right; font-size: 13px;">
+                  <div style="color: #4a5568; margin-bottom: 2px;">總差額</div>
+                  <div style="font-size: 15px;">${formatDiff(totalGDiff)}</div>
+                </div>
+              </div>
+              
+              <div class="module-separator" style="padding-top: 10px; margin-top: 4px; display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <div style="display: flex; gap: 12px; font-size: 13px;">
+                  <span style="color:#4a5568; font-weight:bold;">管道：</span>
+                  <label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="radio" name="g_track_${groupId}" ${currentTrack==='dis'?'checked':''} ${disStatus==='none'?'disabled':''} onchange="changeGroupTrack('${groupId}', 'dis')"> 身障</label>
+                  <label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="radio" name="g_track_${groupId}" ${currentTrack==='ltc'?'checked':''} ${(ltcStatus==='none' || isAnyBlockedInLTC)?'disabled':''} onchange="changeGroupTrack('${groupId}', 'ltc')"> 長照 ${isAnyBlockedInLTC ? "<small style='color:#e53e3e;'>(禁)</small>" : ""}</label>
+                </div>
+                ${currentTrack === 'ltc' ? `<div style="font-size: 13px; font-weight: bold; color: var(--quota-color);">扣總額度: $${gTotalQuota.toLocaleString()}</div>` : ''}
+              </div>
+            </div>`;
+        
+        items.forEach(cartItem => {
+          const db = database[cartItem.id];
+          let ltcItemAllowed = true;
+          if (ltcStatus === 'none' || (ltcGroup === '2' && !db.isGroup2Allowed)) ltcItemAllowed = false;
+
+          const grantDis = calculateGrant(db, 'dis', cartItem.quantity);
+          const grantLtc = ltcItemAllowed ? calculateGrant(db, 'ltc', cartItem.quantity) : 0;
+          const itemQuota = ltcItemAllowed ? calculateQuotaUsed(db, 'ltc', cartItem.quantity) : 0;
+          const diff = grantLtc - grantDis;
+
+          const currentGrant = currentTrack === 'dis' ? grantDis : grantLtc;
+          if(currentTrack === 'dis') sumDis += currentGrant;
+          if(currentTrack === 'ltc') { sumLtc += currentGrant; ltcTotalQuota += itemQuota; }
+
+          html += `
+            <div class="item-card" style="padding: 10px 12px; margin: 0 0 8px 0;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                <div>
+                  <span style="font-size: 14px; font-weight: bold; color: #2d3748;">🔹 ${db.name}</span>
+                  ${db.pricingRule === 'LTC_FIXED' ? `<br><small style="color:#718096;">(長照為固定單項金額)</small>` : ''}
+                </div>
+                <button class="btn-delete" style="padding: 2px 8px;" onclick="removeItem('${cartItem.uid}')">✖ 刪除</button>
+              </div>
+              
+              <div style="margin-bottom: 8px;">
+                <div class="qty-control" style="display:inline-flex; padding: 2px 6px;">
+                  數量: <input type="number" min="1" value="${cartItem.quantity}" onchange="updateQuantity('${cartItem.uid}', this.value)" style="width: 40px;"> <span style="color: gray;">(${db.unit})</span>
+                </div>
+              </div>
+
+              <div class="compare-grid">
+                <div class="compare-box ${currentTrack === 'dis' ? 'selected-track-dis' : ''}" style="${currentTrack !== 'dis' ? 'opacity: 0.5;' : ''}">
+                  <div class="box-title text-dis">身障</div>
+                  <div class="amount">${grantDis > 0 ? '$'+grantDis.toLocaleString() : '-'}</div>
+                </div>
+                ${ltcItemAllowed ? `
+                  <div class="compare-box ${currentTrack === 'ltc' ? 'selected-track-ltc' : ''}" style="${currentTrack !== 'ltc' ? 'opacity: 0.5;' : ''}">
+                    <div class="box-title text-ltc">長照</div>
+                    <div class="amount">${grantLtc > 0 ? '$'+grantLtc.toLocaleString() : '-'}</div>
+                    ${itemQuota > 0 && currentTrack === 'ltc' ? `<div style="font-size:10px; color:var(--quota-color); font-weight:bold; margin-top:2px;">扣額度: $${itemQuota.toLocaleString()}</div>` : ''}
+                  </div>
+                  <div class="compare-box diff-box" style="${currentTrack === 'ltc' ? 'opacity: 1;' : 'opacity: 0.5;'}">
+                    <div class="box-title">差額</div>
+                    <div class="amount">${formatDiff(diff)}</div>
+                  </div>
+                ` : `
+                  <div class="compare-box forbidden" style="grid-column: span 2;">
+                    <div style="font-size:12px; font-weight:bold;">🚫 長照不給付</div>
+                  </div>
+                `}
+              </div>
+            </div>`;
+        });
+        html += `</div>`;
+      }
+
+      container.innerHTML = html;
+
+      const warningContainer = document.getElementById('warning-container');
+      let warnings = [];
+      if (disItemCount > 4) warnings.push(`⚠️ 警告：身障申請已達 ${disItemCount} 項，超過「2年4項次」上限！`);
+      if (ltcStatus !== 'none') {
+        if (ltcGroup === '1') {
+          document.getElementById('quota-display').innerText = `已佔用 $${ltcTotalQuota.toLocaleString()} / 上限 $40,000`;
+          if (ltcTotalQuota > 40000) warnings.push(`⚠️ 警告：長照(第一組)額度已超過 40,000 元上限！`);
+        } else if (ltcGroup === '2') {
+          document.getElementById('quota-display').innerText = `已佔用 $${ltcTotalQuota.toLocaleString()} / 上限 $20,000`;
+          if (ltcTotalQuota > 20000) warnings.push(`⚠️ 警告：長照(第二組)額度已超過 20,000 元上限！`);
+        }
+      } else { document.getElementById('quota-display').innerText = `$0`; }
+
+      warningContainer.innerHTML = warnings.map(w => `<div class="warning-banner">${w}</div>`).join('');
+      document.getElementById('sum-dis').innerText = `$${sumDis.toLocaleString()}`;
+      document.getElementById('sum-ltc').innerText = `$${sumLtc.toLocaleString()}`;
+      document.getElementById('sum-total').innerText = `$${(sumDis + sumLtc).toLocaleString()}`;
+    }
+
+    // 💡 確認：清除按鈕僅清除資料欄位狀態，不觸發雲端更新
+    function clearAll() { 
+      document.getElementById('dis-status').value = "none"; 
+      document.getElementById('ltc-status').value = "none"; 
+      cart = []; 
+      updateUI(); 
+    }
+
+    function openReport() {
+      if (cart.length === 0) { alert("請先加入申請項目！"); return; }
+      const disSel = document.getElementById('dis-status'), ltcSel = document.getElementById('ltc-status'), ltcGroupSel = document.getElementById('ltc-group');
+      let idText = "";
+      if(disSel.value !== 'none') idText += `身障: ${disSel.options[disSel.selectedIndex].text} `;
+      if(ltcSel.value !== 'none') idText += ` | 長照: ${ltcSel.options[ltcSel.selectedIndex].text} (${ltcGroupSel.options[ltcGroupSel.selectedIndex].text})`;
+      document.getElementById('report-id-text').innerText = idText || "無設定身分";
+
+      let tbodyHtml = "", reportDis = 0, reportLtc = 0, reportQuota = 0;
+      cart.forEach(cartItem => {
+        const db = database[cartItem.id];
+        let actualTrack = cartItem.track;
+        if (db.moduleGroup) actualTrack = groupTracks[db.moduleGroup]; 
+
+        const grant = calculateGrant(db, actualTrack, cartItem.quantity);
+        const quota = calculateQuotaUsed(db, actualTrack, cartItem.quantity);
+        if (actualTrack === 'dis') reportDis += grant;
+        if (actualTrack === 'ltc') { reportLtc += grant; reportQuota += quota; }
+
+        tbodyHtml += `<tr><td>${db.name}</td><td class="num">${cartItem.quantity}</td><td style="text-align:center;">${actualTrack === 'dis' ? '<span style="color:var(--dis-color); font-weight:bold;">身障</span>' : '<span style="color:var(--ltc-color); font-weight:bold;">長照</span>'}</td><td class="num">$${grant.toLocaleString()}</td><td class="num" style="color:var(--quota-color);">${actualTrack === 'ltc' && quota > 0 ? '$'+quota.toLocaleString() : '-'}</td></tr>`;
+      });
+      document.getElementById('report-tbody').innerHTML = tbodyHtml;
+      document.getElementById('report-sum-dis').innerText = `$${reportDis.toLocaleString()}`;
+      document.getElementById('report-sum-ltc').innerText = `$${reportLtc.toLocaleString()}`;
+      document.getElementById('report-quota').innerText = `$${reportQuota.toLocaleString()}`;
+      document.getElementById('report-sum-total').innerText = `$${(reportDis + reportLtc).toLocaleString()}`;
+      document.getElementById('report-modal').style.display = 'flex';
+    }
+    function closeReport() { document.getElementById('report-modal').style.display = 'none'; }
+    
+    initApp();
+
+    // 註冊 Service Worker，達成離線運作 (PWA) 的核心
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+          .then(reg => console.log('離線快取註冊成功'))
+          .catch(err => console.log('離線快取註冊失敗', err));
+      });
+    }
+  </script>
+</body>
+</html>
