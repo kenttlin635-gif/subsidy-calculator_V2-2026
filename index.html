@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>新版 補助決策計算器 (雲端同步與PWA離線版)</title>
+  <title>新版 補助決策計算器 (終極完整版)</title>
   
-  <!-- 加入這行：綁定 App 資訊的 manifest.json -->
   <link rel="manifest" href="manifest.json">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
   <style>
     :root {
@@ -95,7 +95,6 @@
     .report-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px; }
     .report-table th, .report-table td { border: 1px solid #cbd5e0; padding: 8px; text-align: left; }
     .report-table th { background: #edf2f7; font-weight: bold; } .report-table td.num { text-align: right; }
-    @media print { body * { visibility: hidden; } .report-modal { display: block !important; position: absolute; left: 0; top: 0; background: none; padding: 0; overflow: visible;} .report-content { width: 100%; max-width: none; box-shadow: none; padding: 0; } .report-content * { visibility: visible; } .no-print { display: none !important; } }
     
     #sync-status { font-size: 11px; color: #a0aec0; width: 100%; margin-top: 4px; }
   </style>
@@ -167,7 +166,10 @@
     <div class="report-content">
       <div class="report-header">
         <h2 style="margin:0; color:#2b6cb0;">補助試算報表</h2>
-        <div class="no-print"><button style="padding:6px 12px; cursor:pointer;" onclick="window.print()">🖨️ 列印</button> <button style="padding:6px 12px; cursor:pointer; color:red;" onclick="closeReport()">✖ 關閉</button></div>
+        <div class="no-print" id="report-btn-group" style="margin-top: 8px;">
+          <button style="padding:8px 16px; cursor:pointer; background:var(--primary-color); color:white; border:none; border-radius:6px; font-weight:bold; margin-right:6px;" onclick="downloadScreenshot()">📸 截圖下載報表</button> 
+          <button style="padding:8px 16px; cursor:pointer; background:#fee2e2; color:var(--danger-color); border:none; border-radius:6px; font-weight:bold;" onclick="closeReport()">✖ 關閉</button>
+        </div>
       </div>
       <div style="margin-bottom: 12px; font-size: 14px;"><strong>身分：</strong> <span id="report-id-text"></span></div>
       <table class="report-table">
@@ -233,28 +235,71 @@
       }
     }
 
+    // 🏆 專業級 CSV 解析引擎（解決 NaN 和引號/逗號亂碼問題）
     function parseCSV(csvText) {
-      const rows = csvText.split('\n').map(row => row.replace('\r', ''));
+      const rows = [];
+      let row = [];
+      let cur = '';
+      let inQuote = false;
+
+      for (let i = 0; i < csvText.length; i++) {
+        const char = csvText[i];
+        if (inQuote) {
+          if (char === '"') {
+            if (i + 1 < csvText.length && csvText[i + 1] === '"') {
+              cur += '"';
+              i++;
+            } else {
+              inQuote = false;
+            }
+          } else {
+            cur += char;
+          }
+        } else {
+          if (char === '"') {
+            inQuote = true;
+          } else if (char === ',') {
+            row.push(cur);
+            cur = '';
+          } else if (char === '\n') {
+            row.push(cur);
+            rows.push(row);
+            row = [];
+            cur = '';
+          } else if (char !== '\r') {
+            cur += char;
+          }
+        }
+      }
+      if (cur !== '') row.push(cur);
+      if (row.length > 0) rows.push(row);
+
       const newDatabase = {};
 
       for (let i = 2; i < rows.length; i++) {
-        const cols = rows[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+        const cols = rows[i];
         if (cols.length < 3) continue; 
 
-        let ltcCode = cols[0] ? cols[0].trim().replace(/"/g, '') : '';
-        let disCode = cols[1] ? cols[1].trim().replace(/"/g, '') : '';
-        let name = cols[2] ? cols[2].trim().replace(/"/g, '') : '';
-        let moduleGroup = cols[3] ? cols[3].trim().replace(/"/g, '') : '';
+        let ltcCode = cols[0] ? cols[0].trim() : '';
+        let disCode = cols[1] ? cols[1].trim() : '';
+        let name = cols[2] ? cols[2].trim() : '';
+        let moduleGroup = cols[3] ? cols[3].trim() : '';
+
+        // 略過底部幽靈空白列
+        if (!name) continue;
 
         let uid = ltcCode;
         if (!uid) uid = disCode ? 'D' + disCode : 'SYS_' + i;
 
-        let disGen = parseInt(cols[4]) || 0;
-        let disMid = parseInt(cols[5]) || 0;
-        let disLow = parseInt(cols[6]) || 0;
-        let ltc3 = parseInt(cols[7]) || 0;
-        let ltc2 = parseInt(cols[8]) || 0;
-        let ltc1 = parseInt(cols[9]) || 0;
+        // 安全解析金額（拔除可能誤填的逗號）
+        const parsePrice = (val) => parseInt(val ? val.replace(/,/g, '') : 0) || 0;
+
+        let disGen = parsePrice(cols[4]);
+        let disMid = parsePrice(cols[5]);
+        let disLow = parsePrice(cols[6]);
+        let ltc3 = parsePrice(cols[7]);
+        let ltc2 = parsePrice(cols[8]);
+        let ltc1 = parsePrice(cols[9]);
 
         let group2 = cols[10] && cols[10].trim().toUpperCase() === 'Y';
         let pricingRule = cols[11] ? cols[11].trim() : '';
@@ -555,7 +600,6 @@
       document.getElementById('sum-total').innerText = `$${(sumDis + sumLtc).toLocaleString()}`;
     }
 
-    // 💡 確認：清除按鈕僅清除資料欄位狀態，不觸發雲端更新
     function clearAll() { 
       document.getElementById('dis-status').value = "none"; 
       document.getElementById('ltc-status').value = "none"; 
@@ -591,11 +635,46 @@
       document.getElementById('report-sum-total').innerText = `$${(reportDis + reportLtc).toLocaleString()}`;
       document.getElementById('report-modal').style.display = 'flex';
     }
+    
     function closeReport() { document.getElementById('report-modal').style.display = 'none'; }
     
+    // 📸 新版截圖下載功能
+    function downloadScreenshot() {
+      const reportElement = document.querySelector('.report-content');
+      const btnGroup = document.getElementById('report-btn-group');
+      
+      btnGroup.style.display = 'none';
+      
+      const originalMaxHeight = reportElement.style.maxHeight;
+      const originalOverflow = reportElement.style.overflowY;
+      
+      reportElement.style.maxHeight = 'none';
+      reportElement.style.overflowY = 'visible';
+
+      html2canvas(reportElement, {
+        scale: 2, 
+        backgroundColor: "#ffffff", 
+        useCORS: true 
+      }).then(canvas => {
+        reportElement.style.maxHeight = originalMaxHeight;
+        reportElement.style.overflowY = originalOverflow;
+        btnGroup.style.display = 'block';
+
+        const link = document.createElement('a');
+        link.download = `補助試算報表_${new Date().getTime()}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      }).catch(err => {
+        console.error('截圖失敗', err);
+        reportElement.style.maxHeight = originalMaxHeight;
+        reportElement.style.overflowY = originalOverflow;
+        btnGroup.style.display = 'block';
+        alert('截圖失敗，請稍後再試！');
+      });
+    }
+
     initApp();
 
-    // 註冊 Service Worker，達成離線運作 (PWA) 的核心
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('sw.js')
