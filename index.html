@@ -119,11 +119,11 @@
     <div class="header">
       <span>📝 補助決策計算器</span>
       <div class="header-btns">
-        <button class="btn-action btn-sync" onclick="syncData()">🔄 雲端更新</button>
+        <button class="btn-action btn-sync" onclick="syncData()">🔄 資料更新</button>
         <button class="btn-action btn-report" onclick="openReport()">📄 報表</button>
         <button class="btn-action" onclick="clearAll()">清除</button>
       </div>
-      <div id="sync-status">目前使用本機離線資料 (請點擊雲端更新)</div>
+      <div id="sync-status">目前使用本機離線資料 (請點擊資料更新)</div>
     </div>
 
     <div class="section">
@@ -242,7 +242,7 @@
         database = JSON.parse(cachedData);
         if(lastSync) document.getElementById('sync-status').innerText = `✅ 已載入離線資料 (上次更新: ${lastSync})`;
       } else {
-        document.getElementById('sync-status').innerText = '⚠️ 尚無資料，請點擊「雲端更新」獲取法規資料';
+        document.getElementById('sync-status').innerText = '⚠️ 尚無資料，請點擊「資料更新」獲取補助資料';
       }
     }
 
@@ -372,7 +372,7 @@
     }
 
     function openCatalog() {
-      if(Object.keys(database).length === 0) { alert("請先點擊「🔄 雲端更新」獲取法規資料！"); return; }
+      if(Object.keys(database).length === 0) { alert("請先點擊「🔄 資料更新」獲取補助資料！"); return; }
       const listContainer = document.getElementById('catalog-list');
       document.getElementById('catalog-search').value = ''; listContainer.innerHTML = '';
       const ltcStatus = document.getElementById('ltc-status').value; 
