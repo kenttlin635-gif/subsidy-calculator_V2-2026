@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>新版 補助決策計算器 (雙態智能提醒版)</title>
+  <title>新版 補助決策計算器 (醫療級防呆修復版)</title>
   
   <link rel="manifest" href="manifest.json">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -81,7 +81,6 @@
     .summary-total { grid-column: span 2; display: flex; justify-content: space-between; align-items: center; background: #fff5f5; border: 1px solid #fed7d7; padding: 8px 12px; border-radius: 6px; font-weight: bold; color: var(--danger-color); font-size: 16px; }
 
     .warning-banner { background-color: #c53030; color: white; font-size: 13px; font-weight: bold; padding: 8px; text-align: center; border-radius: 6px; margin-bottom: 8px; }
-    /* 新增：一般常態提醒的藍色樣式 */
     .info-banner { background-color: #ebf8ff; color: #2b6cb0; border: 1px solid #90cdf4; font-size: 13px; font-weight: bold; padding: 8px; text-align: center; border-radius: 6px; margin-bottom: 8px; }
 
     /* Modals */
@@ -103,7 +102,6 @@
     
     #sync-status { font-size: 11px; color: #a0aec0; width: 100%; margin-top: 4px; }
 
-    /* ====== 全螢幕載入動畫 (Loading Spinner) ====== */
     #loading-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.9); z-index: 9999; justify-content: center; align-items: center; flex-direction: column; }
     .spinner { width: 50px; height: 50px; border: 5px solid #edf2f7; border-top: 5px solid var(--primary-color); border-radius: 50%; animation: spin 1s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -202,7 +200,6 @@
       </div>
       
       <div style="padding: 0 16px 16px 16px;">
-        <!-- 💡 雙態智能提醒標語：移至結算區塊的正上方 -->
         <div id="report-warning-container" style="margin-bottom: 12px;"></div>
 
         <div style="background: #fff5f5; border: 1px solid #feb2b2; padding: 12px; border-radius: 6px; font-size: 15px; margin-bottom: 12px;">
@@ -277,6 +274,13 @@
       }
     }
 
+    // 💡 醫療級防呆 CSV 數值解析
+    const parsePrice = (val) => {
+        if (!val) return 0;
+        const parsed = parseInt(val.replace(/,/g, ''), 10);
+        return isNaN(parsed) ? 0 : parsed;
+    };
+
     function parseCSV(csvText) {
       const rows = []; let row = []; let cur = ''; let inQuote = false;
       for (let i = 0; i < csvText.length; i++) {
@@ -301,12 +305,18 @@
         let name = cols[2] ? cols[2].trim() : ''; let moduleGroup = cols[3] ? cols[3].trim() : '';
         if (!name) continue;
         let uid = ltcCode; if (!uid) uid = disCode ? 'D' + disCode : 'SYS_' + i;
-        const parsePrice = (val) => parseInt(val ? val.replace(/,/g, '') : 0) || 0;
+        
+        // 確保 Group2 權限為嚴格的布林值
+        let isGroup2Allowed = false;
+        if (cols[10] && cols[10].trim().toUpperCase() === 'Y') {
+            isGroup2Allowed = true;
+        }
+
         newDatabase[uid] = {
            name: name, unit: "組", moduleGroup: moduleGroup || null, moduleName: moduleGroup ? `📦 ${moduleGroup} (統包)` : null,
            dis: { general: parsePrice(cols[4]), midLow: parsePrice(cols[5]), low: parsePrice(cols[6]) },
            ltc: { class3: parsePrice(cols[7]), class2: parsePrice(cols[8]), class1: parsePrice(cols[9]) },
-           isGroup2Allowed: cols[10] && cols[10].trim().toUpperCase() === 'Y',
+           isGroup2Allowed: isGroup2Allowed,
            pricingRule: cols[11] ? cols[11].trim() : '',
            displayCode: ltcCode || disCode || '' 
         };
@@ -315,38 +325,49 @@
     }
 
     function updateLtcGroup() {
-       const group = document.getElementById('ltc-group').value;
+       const group = String(document.getElementById('ltc-group').value);
        const quotaInput = document.getElementById('custom-quota');
-       if(group === '2') quotaInput.value = 20000;
-       else if(quotaInput.value == 20000) quotaInput.value = 40000; 
+       if (group === '2') {
+           quotaInput.value = 20000;
+       } else if (group === '1' && quotaInput.value == 20000) {
+           quotaInput.value = 40000; 
+       }
        updateUI();
     }
 
+    // 💡 醫療級防呆：確保金額計算絕對不會回傳 NaN
     function calculatePotentialGrant(item, track, quantity) {
       const disStatus = document.getElementById('dis-status').value;
       const ltcStatus = document.getElementById('ltc-status').value;
-      let unitPrice = 0; let effectiveQty = quantity;
+      let unitPrice = 0; 
+      let effectiveQty = (typeof quantity === 'number' && !isNaN(quantity)) ? quantity : 1;
+      
       if (track === 'dis') {
-        unitPrice = (disStatus !== 'none' && item.dis && item.dis[disStatus]) ? item.dis[disStatus] : 0;
+        if (disStatus !== 'none' && item.dis && typeof item.dis[disStatus] === 'number') {
+            unitPrice = item.dis[disStatus];
+        }
       } else if (track === 'ltc') {
-        unitPrice = (ltcStatus !== 'none' && item.ltc && item.ltc[ltcStatus]) ? item.ltc[ltcStatus] : 0;
+        if (ltcStatus !== 'none' && item.ltc && typeof item.ltc[ltcStatus] === 'number') {
+            unitPrice = item.ltc[ltcStatus];
+        }
         if (item.pricingRule === 'LTC_FIXED') effectiveQty = 1;
       }
-      return unitPrice * effectiveQty; 
+      return (unitPrice * effectiveQty) || 0; 
     }
 
     function calculateQuotaUsed(item, track, quantity) {
-      if (track === 'ltc' && item.ltc && item.ltc.class1) {
-        let effectiveQty = quantity;
+      if (track === 'ltc' && item.ltc && typeof item.ltc.class1 === 'number') {
+        let effectiveQty = (typeof quantity === 'number' && !isNaN(quantity)) ? quantity : 1;
         if (item.pricingRule === 'LTC_FIXED') effectiveQty = 1;
-        return item.ltc.class1 * effectiveQty;
+        return (item.ltc.class1 * effectiveQty) || 0;
       }
       return 0;
     }
 
     function formatDiff(diff) {
-      if (diff > 0) return `<span class="text-diff-pos">+$${diff.toLocaleString()} <span style="font-size:12px; font-weight:normal;">(偏長)</span></span>`;
-      if (diff < 0) return `<span class="text-diff-neg">-$${Math.abs(diff).toLocaleString()} <span style="font-size:12px; font-weight:normal;">(偏身)</span></span>`;
+      const safeDiff = Number(diff) || 0;
+      if (safeDiff > 0) return `<span class="text-diff-pos">+$${safeDiff.toLocaleString()} <span style="font-size:12px; font-weight:normal;">(偏長)</span></span>`;
+      if (safeDiff < 0) return `<span class="text-diff-neg">-$${Math.abs(safeDiff).toLocaleString()} <span style="font-size:12px; font-weight:normal;">(偏身)</span></span>`;
       return `<span style="color:gray;">$0 <span style="font-size:12px; font-weight:normal;">(皆可)</span></span>`;
     }
 
@@ -354,14 +375,18 @@
       if(Object.keys(database).length === 0) { alert("請先點擊「🔄 雲端更新」獲取法規資料！"); return; }
       const listContainer = document.getElementById('catalog-list');
       document.getElementById('catalog-search').value = ''; listContainer.innerHTML = '';
-      const ltcStatus = document.getElementById('ltc-status').value; const ltcGroup = document.getElementById('ltc-group').value;
+      const ltcStatus = document.getElementById('ltc-status').value; 
+      const ltcGroup = String(document.getElementById('ltc-group').value);
       const availableIds = Object.keys(database).filter(id => !cart.find(c => c.id === id));
       
       if (availableIds.length === 0) { listContainer.innerHTML = `<div style="text-align:center; padding: 20px; color:#a0aec0;">皆已加入清單！</div>`; } 
       else {
         availableIds.forEach(id => {
           const db = database[id];
-          const isBlocked = (ltcStatus !== 'none' && ltcGroup === '2' && db.isGroup2Allowed !== true);
+          let isBlocked = false;
+          if (ltcStatus !== 'none' && ltcGroup === '2' && db.isGroup2Allowed === false) {
+              isBlocked = true;
+          }
           listContainer.innerHTML += `
             <label class="catalog-item" data-search="${db.displayCode.toLowerCase()} ${db.name.toLowerCase()}">
               <input type="checkbox" class="catalog-checkbox" value="${id}">
@@ -391,7 +416,8 @@
         cart.push({ id: cb.value, track: 'none', uid: "uid_" + Date.now() + Math.random(), quantity: 1 });
         if (db.moduleGroup && !groupTracks[db.moduleGroup]) { groupTracks[db.moduleGroup] = 'none'; }
       });
-      closeCatalog(); updateUI();
+      closeCatalog(); 
+      setTimeout(updateUI, 10); // 微小延遲確保 Modal 關閉後再渲染，避免畫面卡頓
     }
 
     function removeItem(uid) { cart = cart.filter(i => i.uid !== uid); updateUI(); }
@@ -403,228 +429,266 @@
     }
     function changeETrack(uid, track) { cart.find(i => i.uid === uid).track = track; updateUI(); }
     function changeGroupTrack(groupId, track) { groupTracks[groupId] = track; updateUI(); }
-    function updateQuantity(uid, qty) { const item = cart.find(i => i.uid === uid); if(item) { item.quantity = Math.max(1, parseInt(qty, 10) || 1); updateUI(); } }
+    
+    function updateQuantity(uid, qty) { 
+      const item = cart.find(i => i.uid === uid); 
+      if(item) { 
+        const parsed = parseInt(qty, 10);
+        item.quantity = (isNaN(parsed) || parsed < 1) ? 1 : parsed; 
+        updateUI(); 
+      } 
+    }
 
     function updateUI() {
-      const ltcStatusEl = document.getElementById('ltc-status'), ltcGroupEl = document.getElementById('ltc-group'), disStatus = document.getElementById('dis-status').value;
-      const ltcStatus = ltcStatusEl.value;
-      ltcGroupEl.style.display = (ltcStatus === 'none') ? 'none' : 'block';
-      
-      const quotaCol = document.getElementById('quota-col');
-      quotaCol.style.display = (ltcStatus === 'none') ? 'none' : 'block';
-      const customQuota = parseInt(document.getElementById('custom-quota').value) || 0;
-      const ltcGroup = ltcGroupEl.value;
+      try {
+        const ltcStatusEl = document.getElementById('ltc-status'), ltcGroupEl = document.getElementById('ltc-group'), disStatus = document.getElementById('dis-status').value;
+        const ltcStatus = ltcStatusEl.value;
+        ltcGroupEl.style.display = (ltcStatus === 'none') ? 'none' : 'block';
+        
+        const quotaCol = document.getElementById('quota-col');
+        quotaCol.style.display = (ltcStatus === 'none') ? 'none' : 'block';
+        const customQuota = parseInt(document.getElementById('custom-quota').value) || 0;
+        const ltcGroup = String(ltcGroupEl.value);
 
-      const container = document.getElementById('cart-container');
-      let sumDis = 0, sumLtc = 0, ltcTotalQuota = 0, disItemCount = 0;
-      
-      const independentItems = []; const groupedItems = {};
+        const container = document.getElementById('cart-container');
+        let sumDis = 0, sumLtc = 0, ltcTotalQuota = 0, disItemCount = 0;
+        
+        const independentItems = []; const groupedItems = {};
 
-      cart.forEach(cartItem => {
-        const db = database[cartItem.id];
-        if (db.moduleGroup) {
-          if (!groupedItems[db.moduleGroup]) groupedItems[db.moduleGroup] = [];
-          groupedItems[db.moduleGroup].push(cartItem);
-        } else {
-          independentItems.push(cartItem);
-        }
-      });
-
-      const displayBlocks = [];
-
-      independentItems.forEach(cartItem => {
-        const db = database[cartItem.id];
-        let ltcAllowed = (ltcStatus !== 'none' && !(ltcGroup === '2' && !db.isGroup2Allowed));
-        const pDis = calculatePotentialGrant(db, 'dis', cartItem.quantity);
-        const pLtc = ltcAllowed ? calculatePotentialGrant(db, 'ltc', cartItem.quantity) : 0;
-        displayBlocks.push({ type: 'item', data: cartItem, diff: pLtc - pDis });
-      });
-
-      for (const groupId in groupedItems) {
-        const items = groupedItems[groupId];
-        let groupPDis = 0; let groupPLtc = 0;
-        items.forEach(cartItem => {
+        cart.forEach(cartItem => {
           const db = database[cartItem.id];
-          let ltcAllowed = (ltcStatus !== 'none' && !(ltcGroup === '2' && !db.isGroup2Allowed));
-          groupPDis += calculatePotentialGrant(db, 'dis', cartItem.quantity);
-          groupPLtc += ltcAllowed ? calculatePotentialGrant(db, 'ltc', cartItem.quantity) : 0;
+          if (db.moduleGroup) {
+            if (!groupedItems[db.moduleGroup]) groupedItems[db.moduleGroup] = [];
+            groupedItems[db.moduleGroup].push(cartItem);
+          } else {
+            independentItems.push(cartItem);
+          }
         });
-        displayBlocks.push({ type: 'group', groupId: groupId, items: items, diff: groupPLtc - groupPDis });
-      }
 
-      displayBlocks.sort((a, b) => b.diff - a.diff);
+        const displayBlocks = [];
 
-      let html = "";
-      let themeIndex = 0; 
-
-      displayBlocks.forEach(block => {
-        if (block.type === 'item') {
-          const cartItem = block.data;
+        independentItems.forEach(cartItem => {
           const db = database[cartItem.id];
-          let ltcAllowed = true;
-          if (ltcStatus === 'none' || (ltcGroup === '2' && !db.isGroup2Allowed)) ltcAllowed = false;
           
-          if (!ltcAllowed && cartItem.track === 'ltc') cartItem.track = 'none';
+          // 💡 醫療級防呆邏輯
+          let ltcAllowed = false;
+          if (ltcStatus !== 'none') {
+              if (ltcGroup === '2' && db.isGroup2Allowed === false) ltcAllowed = false;
+              else ltcAllowed = true;
+          }
 
-          const pDis = calculatePotentialGrant(db, 'dis', cartItem.quantity);
-          const pLtc = ltcAllowed ? calculatePotentialGrant(db, 'ltc', cartItem.quantity) : 0;
-          const pQuota = ltcAllowed ? calculateQuotaUsed(db, 'ltc', cartItem.quantity) : 0;
-          
-          if(cartItem.track === 'dis') { sumDis += pDis; disItemCount += cartItem.quantity; } 
-          if(cartItem.track === 'ltc' && ltcAllowed) { sumLtc += pLtc; ltcTotalQuota += pQuota; }
+          const pDis = calculatePotentialGrant(db, 'dis', cartItem.quantity) || 0;
+          const pLtc = ltcAllowed ? (calculatePotentialGrant(db, 'ltc', cartItem.quantity) || 0) : 0;
+          displayBlocks.push({ type: 'item', data: cartItem, diff: pLtc - pDis });
+        });
 
-          html += `
-            <div class="item-card">
-              <div class="item-header">
-                <div class="item-title-group"><span class="item-title">${db.name}</span><div class="qty-control">數量: <input type="number" min="1" value="${cartItem.quantity}" onchange="updateQuantity('${cartItem.uid}', this.value)"></div></div>
-                <button class="btn-delete" onclick="removeItem('${cartItem.uid}')">✖ 刪除</button>
-              </div>
-              
-              <div class="track-selector-row" style="margin-bottom: 10px;">
-                <div class="track-selector-options"><span>👉 決定管道:</span>
-                  <label><input type="radio" name="track_${cartItem.uid}" ${cartItem.track==='dis'?'checked':''} ${disStatus==='none'?'disabled':''} onchange="changeETrack('${cartItem.uid}', 'dis')">身障</label>
-                  <label><input type="radio" name="track_${cartItem.uid}" ${cartItem.track==='ltc'?'checked':''} ${!ltcAllowed?'disabled':''} onchange="changeETrack('${cartItem.uid}', 'ltc')">長照</label>
-                  <label><input type="radio" name="track_${cartItem.uid}" ${cartItem.track==='none'?'checked':''} onchange="changeETrack('${cartItem.uid}', 'none')">暫不申請</label>
-                </div>
-                ${cartItem.track === 'ltc' && pQuota > 0 ? `<div class="quota-info-inline">扣額度: $${pQuota.toLocaleString()}</div>` : ''}
-              </div>
-
-              <div class="compare-grid">
-                <div class="compare-box ${cartItem.track === 'dis' ? 'selected-track-dis' : ''}" style="${cartItem.track !== 'dis' ? 'opacity: 0.5;' : ''}"><div class="box-title text-dis">身障</div><div class="amount">${pDis > 0 ? '$'+pDis.toLocaleString() : '-'}</div></div>
-                ${ltcAllowed ? `
-                  <div class="compare-box ${cartItem.track === 'ltc' ? 'selected-track-ltc' : ''}" style="${currentTrack !== 'ltc' ? 'opacity: 0.5;' : ''}"><div class="box-title text-ltc">長照</div><div class="amount">${pLtc > 0 ? '$'+pLtc.toLocaleString() : '-'}</div></div>
-                  <div class="compare-box diff-box" style="${cartItem.track === 'ltc' || cartItem.track === 'dis' ? 'opacity: 1;' : 'opacity: 0.5;'}"><div class="box-title">差額</div><div class="amount">${formatDiff(block.diff)}</div></div>
-                ` : `<div class="compare-box forbidden" style="grid-column: span 2;"><div style="font-size:13px; font-weight:bold;">🚫 不給付</div></div>`}
-              </div>
-            </div>`;
+        for (const groupId in groupedItems) {
+          const items = groupedItems[groupId];
+          let groupPDis = 0; let groupPLtc = 0;
+          items.forEach(cartItem => {
+            const db = database[cartItem.id];
             
-        } else if (block.type === 'group') {
-          const groupId = block.groupId;
-          const items = block.items;
-          const groupName = database[items[0].id].moduleName || "群組模組";
-          const currentTheme = themeColors[themeIndex % themeColors.length]; 
-          themeIndex++;
-          
-          let currentTrack = groupTracks[groupId] || 'none';
-          if (currentTrack === 'dis' && disStatus === 'none') currentTrack = 'none';
-          if (currentTrack === 'ltc' && ltcStatus === 'none') currentTrack = 'none';
-          groupTracks[groupId] = currentTrack; 
+            let ltcAllowed = false;
+            if (ltcStatus !== 'none') {
+                if (ltcGroup === '2' && db.isGroup2Allowed === false) ltcAllowed = false;
+                else ltcAllowed = true;
+            }
 
-          if (currentTrack === 'dis') disItemCount += 1; 
-
-          let totalPDis = 0, totalPLtc = 0, totalPQuota = 0, isAnyBlockedInLTC = false;
-
-          items.forEach(cartItem => {
-            const db = database[cartItem.id];
-            totalPDis += calculatePotentialGrant(db, 'dis', cartItem.quantity); 
-            if (ltcGroup === '2' && db.isGroup2Allowed !== true) { isAnyBlockedInLTC = true; } 
-            else { totalPLtc += calculatePotentialGrant(db, 'ltc', cartItem.quantity); totalPQuota += calculateQuotaUsed(db, 'ltc', cartItem.quantity); }
+            groupPDis += calculatePotentialGrant(db, 'dis', cartItem.quantity) || 0;
+            groupPLtc += ltcAllowed ? (calculatePotentialGrant(db, 'ltc', cartItem.quantity) || 0) : 0;
           });
+          displayBlocks.push({ type: 'group', groupId: groupId, items: items, diff: groupPLtc - groupPDis });
+        }
 
-          if(currentTrack === 'dis') sumDis += totalPDis;
-          if(currentTrack === 'ltc') { sumLtc += totalPLtc; ltcTotalQuota += totalPQuota; }
+        // 安全排序
+        displayBlocks.sort((a, b) => (Number(b.diff) || 0) - (Number(a.diff) || 0));
 
-          html += `
-            <div class="module-group ${currentTheme}">
-              <div class="module-header">
-                <span>${groupName}</span>
-                <button class="btn-delete-group" onclick="removeModuleGroup('${groupId}')">✖ 刪除群組</button>
-              </div>
-              
-              <div class="module-control-panel">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
-                  <div style="font-size: 13px; line-height: 1.6;">
-                    <span style="color:var(--dis-color); font-weight:bold;">身障總計: $${totalPDis.toLocaleString()}</span><br>
-                    <span style="color:var(--ltc-color); font-weight:bold;">長照總計: $${totalPLtc.toLocaleString()}</span>
-                  </div>
-                  <div style="text-align: right; font-size: 13px;">
-                    <div style="color: #4a5568; margin-bottom: 2px;">總差額</div>
-                    <div style="font-size: 15px;">${formatDiff(block.diff)}</div>
-                  </div>
-                </div>
-                
-                <div class="module-separator" style="padding-top: 10px; margin-top: 4px; display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 8px;">
-                  <div style="display: flex; gap: 12px; font-size: 13px; flex-wrap: wrap;">
-                    <span style="color:#4a5568; font-weight:bold;">管道：</span>
-                    <label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="radio" name="g_track_${groupId}" ${currentTrack==='dis'?'checked':''} ${disStatus==='none'?'disabled':''} onchange="changeGroupTrack('${groupId}', 'dis')"> 身障</label>
-                    <label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="radio" name="g_track_${groupId}" ${currentTrack==='ltc'?'checked':''} ${(ltcStatus==='none' || isAnyBlockedInLTC)?'disabled':''} onchange="changeGroupTrack('${groupId}', 'ltc')"> 長照 ${isAnyBlockedInLTC ? "<small style='color:#e53e3e;'>(禁)</small>" : ""}</label>
-                    <label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="radio" name="g_track_${groupId}" ${currentTrack==='none'?'checked':''} onchange="changeGroupTrack('${groupId}', 'none')"> 暫不申請</label>
-                  </div>
-                  ${currentTrack === 'ltc' ? `<div style="font-size: 13px; font-weight: bold; color: var(--quota-color);">扣總額度: $${totalPQuota.toLocaleString()}</div>` : ''}
-                </div>
-              </div>`;
-          
-          items.forEach(cartItem => {
+        let html = "";
+        let themeIndex = 0; 
+
+        displayBlocks.forEach(block => {
+          if (block.type === 'item') {
+            const cartItem = block.data;
             const db = database[cartItem.id];
-            let ltcItemAllowed = true;
-            if (ltcStatus === 'none' || (ltcGroup === '2' && !db.isGroup2Allowed)) ltcItemAllowed = false;
+            
+            let ltcItemAllowed = false;
+            if (ltcStatus !== 'none') {
+                if (ltcGroup === '2' && db.isGroup2Allowed === false) ltcItemAllowed = false;
+                else ltcItemAllowed = true;
+            }
+            
+            if (!ltcItemAllowed && cartItem.track === 'ltc') cartItem.track = 'none';
 
-            const pDis = calculatePotentialGrant(db, 'dis', cartItem.quantity);
-            const pLtc = ltcItemAllowed ? calculatePotentialGrant(db, 'ltc', cartItem.quantity) : 0;
-            const pQuota = ltcItemAllowed ? calculateQuotaUsed(db, 'ltc', cartItem.quantity) : 0;
+            const pDis = calculatePotentialGrant(db, 'dis', cartItem.quantity) || 0;
+            const pLtc = ltcItemAllowed ? (calculatePotentialGrant(db, 'ltc', cartItem.quantity) || 0) : 0;
+            const pQuota = ltcItemAllowed ? (calculateQuotaUsed(db, 'ltc', cartItem.quantity) || 0) : 0;
+            
+            if(cartItem.track === 'dis') { sumDis += pDis; disItemCount += cartItem.quantity; } 
+            if(cartItem.track === 'ltc' && ltcItemAllowed) { sumLtc += pLtc; ltcTotalQuota += pQuota; }
 
             html += `
-              <div class="item-card" style="padding: 10px 12px; margin: 0 0 8px 0;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                  <div>
-                    <span style="font-size: 14px; font-weight: bold; color: #2d3748;">🔹 ${db.name}</span>
-                    ${db.pricingRule === 'LTC_FIXED' ? `<br><small style="color:#718096;">(長照為固定單項金額)</small>` : ''}
-                  </div>
-                  <button class="btn-delete" style="padding: 2px 8px;" onclick="removeItem('${cartItem.uid}')">✖ 刪除</button>
+              <div class="item-card">
+                <div class="item-header">
+                  <div class="item-title-group"><span class="item-title">${db.name}</span><div class="qty-control">數量: <input type="number" min="1" value="${cartItem.quantity}" onchange="updateQuantity('${cartItem.uid}', this.value)"></div></div>
+                  <button class="btn-delete" onclick="removeItem('${cartItem.uid}')">✖ 刪除</button>
                 </div>
                 
-                <div style="margin-bottom: 8px;">
-                  <div class="qty-control" style="display:inline-flex; padding: 2px 6px;">
-                    數量: <input type="number" min="1" value="${cartItem.quantity}" onchange="updateQuantity('${cartItem.uid}', this.value)" style="width: 40px;"> <span style="color: gray;">(${db.unit})</span>
+                <div class="track-selector-row" style="margin-bottom: 10px;">
+                  <div class="track-selector-options"><span>👉 決定管道:</span>
+                    <label><input type="radio" name="track_${cartItem.uid}" ${cartItem.track==='dis'?'checked':''} ${disStatus==='none'?'disabled':''} onchange="changeETrack('${cartItem.uid}', 'dis')">身障</label>
+                    <label><input type="radio" name="track_${cartItem.uid}" ${cartItem.track==='ltc'?'checked':''} ${!ltcItemAllowed?'disabled':''} onchange="changeETrack('${cartItem.uid}', 'ltc')">長照</label>
+                    <label><input type="radio" name="track_${cartItem.uid}" ${cartItem.track==='none'?'checked':''} onchange="changeETrack('${cartItem.uid}', 'none')">暫不申請</label>
                   </div>
+                  ${cartItem.track === 'ltc' && pQuota > 0 ? `<div class="quota-info-inline">扣額度: $${pQuota.toLocaleString()}</div>` : ''}
                 </div>
 
                 <div class="compare-grid">
-                  <div class="compare-box ${currentTrack === 'dis' ? 'selected-track-dis' : ''}" style="${currentTrack !== 'dis' ? 'opacity: 0.5;' : ''}">
-                    <div class="box-title text-dis">身障</div>
-                    <div class="amount">${pDis > 0 ? '$'+pDis.toLocaleString() : '-'}</div>
-                  </div>
+                  <div class="compare-box ${cartItem.track === 'dis' ? 'selected-track-dis' : ''}" style="${cartItem.track !== 'dis' ? 'opacity: 0.5;' : ''}"><div class="box-title text-dis">身障</div><div class="amount">${pDis > 0 ? '$'+pDis.toLocaleString() : '-'}</div></div>
                   ${ltcItemAllowed ? `
-                    <div class="compare-box ${currentTrack === 'ltc' ? 'selected-track-ltc' : ''}" style="${currentTrack !== 'ltc' ? 'opacity: 0.5;' : ''}">
-                      <div class="box-title text-ltc">長照</div>
-                      <div class="amount">${pLtc > 0 ? '$'+pLtc.toLocaleString() : '-'}</div>
-                      ${pQuota > 0 && currentTrack === 'ltc' ? `<div style="font-size:10px; color:var(--quota-color); font-weight:bold; margin-top:2px;">扣額度: $${pQuota.toLocaleString()}</div>` : ''}
-                    </div>
-                    <div class="compare-box diff-box" style="${currentTrack === 'ltc' || currentTrack === 'dis' ? 'opacity: 1;' : 'opacity: 0.5;'}">
-                      <div class="box-title">差額</div>
-                      <div class="amount">${formatDiff(pLtc - pDis)}</div>
-                    </div>
-                  ` : `
-                    <div class="compare-box forbidden" style="grid-column: span 2;">
-                      <div style="font-size:12px; font-weight:bold;">🚫 長照不給付</div>
-                    </div>
-                  `}
+                    <div class="compare-box ${cartItem.track === 'ltc' ? 'selected-track-ltc' : ''}" style="${cartItem.track !== 'ltc' ? 'opacity: 0.5;' : ''}"><div class="box-title text-ltc">長照</div><div class="amount">${pLtc > 0 ? '$'+pLtc.toLocaleString() : '-'}</div></div>
+                    <div class="compare-box diff-box" style="${cartItem.track === 'ltc' || cartItem.track === 'dis' ? 'opacity: 1;' : 'opacity: 0.5;'}"><div class="box-title">差額</div><div class="amount">${formatDiff(block.diff)}</div></div>
+                  ` : `<div class="compare-box forbidden" style="grid-column: span 2;"><div style="font-size:13px; font-weight:bold;">🚫 不給付</div></div>`}
                 </div>
               </div>`;
-          });
-          html += `</div>`;
-        }
-      });
+              
+          } else if (block.type === 'group') {
+            const groupId = block.groupId;
+            const items = block.items;
+            const groupName = database[items[0].id].moduleName || "群組模組";
+            const currentTheme = themeColors[themeIndex % themeColors.length]; 
+            themeIndex++;
+            
+            let currentTrack = groupTracks[groupId] || 'none';
+            if (currentTrack === 'dis' && disStatus === 'none') currentTrack = 'none';
+            if (currentTrack === 'ltc' && ltcStatus === 'none') currentTrack = 'none';
+            groupTracks[groupId] = currentTrack; 
 
-      container.innerHTML = html;
+            if (currentTrack === 'dis') disItemCount += 1; 
 
-      const warningContainer = document.getElementById('warning-container');
-      let warnings = [];
-      if (disItemCount > 4) warnings.push(`⚠️ 警告：身障申請已達 ${disItemCount} 項，超過「2年4項次」上限！`);
-      
-      if (ltcStatus !== 'none') {
-        document.getElementById('quota-display').innerText = `$${ltcTotalQuota.toLocaleString()} / 剩餘 $${customQuota.toLocaleString()}`;
-        if (ltcTotalQuota > customQuota) {
-          warnings.push(`⚠️ 警告：長照申請已超過設定之剩餘額度 $${customQuota.toLocaleString()}，超額部分需自費！`);
+            let totalPDis = 0, totalPLtc = 0, totalPQuota = 0, isAnyBlockedInLTC = false;
+
+            items.forEach(cartItem => {
+              const db = database[cartItem.id];
+              totalPDis += calculatePotentialGrant(db, 'dis', cartItem.quantity) || 0; 
+              
+              if (ltcStatus !== 'none' && ltcGroup === '2' && db.isGroup2Allowed === false) { 
+                  isAnyBlockedInLTC = true; 
+              } else { 
+                  totalPLtc += calculatePotentialGrant(db, 'ltc', cartItem.quantity) || 0; 
+                  totalPQuota += calculateQuotaUsed(db, 'ltc', cartItem.quantity) || 0; 
+              }
+            });
+
+            if(currentTrack === 'dis') sumDis += totalPDis;
+            if(currentTrack === 'ltc') { sumLtc += totalPLtc; ltcTotalQuota += totalPQuota; }
+
+            html += `
+              <div class="module-group ${currentTheme}">
+                <div class="module-header">
+                  <span>${groupName}</span>
+                  <button class="btn-delete-group" onclick="removeModuleGroup('${groupId}')">✖ 刪除群組</button>
+                </div>
+                
+                <div class="module-control-panel">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
+                    <div style="font-size: 13px; line-height: 1.6;">
+                      <span style="color:var(--dis-color); font-weight:bold;">身障總計: $${totalPDis.toLocaleString()}</span><br>
+                      <span style="color:var(--ltc-color); font-weight:bold;">長照總計: $${totalPLtc.toLocaleString()}</span>
+                    </div>
+                    <div style="text-align: right; font-size: 13px;">
+                      <div style="color: #4a5568; margin-bottom: 2px;">總差額</div>
+                      <div style="font-size: 15px;">${formatDiff(block.diff)}</div>
+                    </div>
+                  </div>
+                  
+                  <div class="module-separator" style="padding-top: 10px; margin-top: 4px; display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; gap: 12px; font-size: 13px; flex-wrap: wrap;">
+                      <span style="color:#4a5568; font-weight:bold;">管道：</span>
+                      <label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="radio" name="g_track_${groupId}" ${currentTrack==='dis'?'checked':''} ${disStatus==='none'?'disabled':''} onchange="changeGroupTrack('${groupId}', 'dis')"> 身障</label>
+                      <label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="radio" name="g_track_${groupId}" ${currentTrack==='ltc'?'checked':''} ${(ltcStatus==='none' || isAnyBlockedInLTC)?'disabled':''} onchange="changeGroupTrack('${groupId}', 'ltc')"> 長照 ${isAnyBlockedInLTC ? "<small style='color:#e53e3e;'>(禁)</small>" : ""}</label>
+                      <label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="radio" name="g_track_${groupId}" ${currentTrack==='none'?'checked':''} onchange="changeGroupTrack('${groupId}', 'none')"> 暫不申請</label>
+                    </div>
+                    ${currentTrack === 'ltc' ? `<div style="font-size: 13px; font-weight: bold; color: var(--quota-color);">扣總額度: $${totalPQuota.toLocaleString()}</div>` : ''}
+                  </div>
+                </div>`;
+            
+            items.forEach(cartItem => {
+              const db = database[cartItem.id];
+              let ltcItemAllowed = false;
+              if (ltcStatus !== 'none') {
+                  if (ltcGroup === '2' && db.isGroup2Allowed === false) ltcItemAllowed = false;
+                  else ltcItemAllowed = true;
+              }
+
+              const pDis = calculatePotentialGrant(db, 'dis', cartItem.quantity) || 0;
+              const pLtc = ltcItemAllowed ? (calculatePotentialGrant(db, 'ltc', cartItem.quantity) || 0) : 0;
+              const pQuota = ltcItemAllowed ? (calculateQuotaUsed(db, 'ltc', cartItem.quantity) || 0) : 0;
+
+              html += `
+                <div class="item-card" style="padding: 10px 12px; margin: 0 0 8px 0;">
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                    <div>
+                      <span style="font-size: 14px; font-weight: bold; color: #2d3748;">🔹 ${db.name}</span>
+                      ${db.pricingRule === 'LTC_FIXED' ? `<br><small style="color:#718096;">(長照為固定單項金額)</small>` : ''}
+                    </div>
+                    <button class="btn-delete" style="padding: 2px 8px;" onclick="removeItem('${cartItem.uid}')">✖ 刪除</button>
+                  </div>
+                  
+                  <div style="margin-bottom: 8px;">
+                    <div class="qty-control" style="display:inline-flex; padding: 2px 6px;">
+                      數量: <input type="number" min="1" value="${cartItem.quantity}" onchange="updateQuantity('${cartItem.uid}', this.value)" style="width: 40px;"> <span style="color: gray;">(${db.unit})</span>
+                    </div>
+                  </div>
+
+                  <div class="compare-grid">
+                    <div class="compare-box ${currentTrack === 'dis' ? 'selected-track-dis' : ''}" style="${currentTrack !== 'dis' ? 'opacity: 0.5;' : ''}">
+                      <div class="box-title text-dis">身障</div>
+                      <div class="amount">${pDis > 0 ? '$'+pDis.toLocaleString() : '-'}</div>
+                    </div>
+                    ${ltcItemAllowed ? `
+                      <div class="compare-box ${currentTrack === 'ltc' ? 'selected-track-ltc' : ''}" style="${currentTrack !== 'ltc' ? 'opacity: 0.5;' : ''}">
+                        <div class="box-title text-ltc">長照</div>
+                        <div class="amount">${pLtc > 0 ? '$'+pLtc.toLocaleString() : '-'}</div>
+                        ${pQuota > 0 && currentTrack === 'ltc' ? `<div style="font-size:10px; color:var(--quota-color); font-weight:bold; margin-top:2px;">扣額度: $${pQuota.toLocaleString()}</div>` : ''}
+                      </div>
+                      <div class="compare-box diff-box" style="${currentTrack === 'ltc' || currentTrack === 'dis' ? 'opacity: 1;' : 'opacity: 0.5;'}">
+                        <div class="box-title">差額</div>
+                        <div class="amount">${formatDiff(pLtc - pDis)}</div>
+                      </div>
+                    ` : `
+                      <div class="compare-box forbidden" style="grid-column: span 2;">
+                        <div style="font-size:12px; font-weight:bold;">🚫 長照不給付</div>
+                      </div>
+                    `}
+                  </div>
+                </div>`;
+            });
+            html += `</div>`;
+          }
+        });
+
+        container.innerHTML = html;
+
+        const warningContainer = document.getElementById('warning-container');
+        let warnings = [];
+        if (disItemCount > 4) warnings.push(`⚠️ 警告：身障申請已達 ${disItemCount} 項，超過「2年4項次」上限！`);
+        
+        if (ltcStatus !== 'none') {
+          document.getElementById('quota-display').innerText = `$${ltcTotalQuota.toLocaleString()} / 剩餘 $${customQuota.toLocaleString()}`;
+          if (ltcTotalQuota > customQuota) {
+            warnings.push(`⚠️ 警告：長照申請已超過設定之剩餘額度 $${customQuota.toLocaleString()}，超額部分需自費！`);
+          }
+        } else { 
+          document.getElementById('quota-display').innerText = `$0`; 
         }
-      } else { 
-        document.getElementById('quota-display').innerText = `$0`; 
+
+        warningContainer.innerHTML = warnings.map(w => `<div class="warning-banner">${w}</div>`).join('');
+        document.getElementById('sum-dis').innerText = `$${sumDis.toLocaleString()}`;
+        document.getElementById('sum-ltc').innerText = `$${sumLtc.toLocaleString()}`;
+        document.getElementById('sum-total').innerText = `$${(sumDis + sumLtc).toLocaleString()}`;
+      } catch (err) {
+        console.error("更新畫面時發生錯誤：", err);
       }
-
-      warningContainer.innerHTML = warnings.map(w => `<div class="warning-banner">${w}</div>`).join('');
-      document.getElementById('sum-dis').innerText = `$${sumDis.toLocaleString()}`;
-      document.getElementById('sum-ltc').innerText = `$${sumLtc.toLocaleString()}`;
-      document.getElementById('sum-total').innerText = `$${(sumDis + sumLtc).toLocaleString()}`;
     }
 
     function clearAll() { 
@@ -669,13 +733,10 @@
       document.getElementById('report-sum-ltc').innerText = `$${reportLtc.toLocaleString()}`;
       document.getElementById('report-sum-total').innerText = `$${(reportDis + reportLtc).toLocaleString()}`;
 
-      // 💡 雙態智能提醒標語邏輯
       const warnContainer = document.getElementById('report-warning-container');
       if (ltcSel.value !== 'none' && reportQuota > customQuota) {
-        // 超額模式（紅字警告）
         warnContainer.innerHTML = `<div class="warning-banner" style="margin-bottom: 0;">⚠️ 【超額警告】長照已超出設定額度，超額部分需自費。實際金額以公文為主。</div>`;
       } else {
-        // 常態模式（藍字免責提醒）
         warnContainer.innerHTML = `<div class="info-banner" style="margin-bottom: 0;">💡 【試算提醒】此表僅供試算參考，實際核定補助金額以政府公文為主。</div>`;
       }
 
