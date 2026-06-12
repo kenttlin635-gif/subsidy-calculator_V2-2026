@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>新版 補助決策計算器 (流暢截圖升級版)</title>
+  <title>新版 補助決策計算器 (雙態智能提醒版)</title>
   
   <link rel="manifest" href="manifest.json">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -81,6 +81,8 @@
     .summary-total { grid-column: span 2; display: flex; justify-content: space-between; align-items: center; background: #fff5f5; border: 1px solid #fed7d7; padding: 8px 12px; border-radius: 6px; font-weight: bold; color: var(--danger-color); font-size: 16px; }
 
     .warning-banner { background-color: #c53030; color: white; font-size: 13px; font-weight: bold; padding: 8px; text-align: center; border-radius: 6px; margin-bottom: 8px; }
+    /* 新增：一般常態提醒的藍色樣式 */
+    .info-banner { background-color: #ebf8ff; color: #2b6cb0; border: 1px solid #90cdf4; font-size: 13px; font-weight: bold; padding: 8px; text-align: center; border-radius: 6px; margin-bottom: 8px; }
 
     /* Modals */
     .catalog-modal, .report-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 200; justify-content: center; align-items: center; padding: 16px; }
@@ -109,6 +111,7 @@
 </head>
 <body>
 
+  <!-- 載入中遮罩 -->
   <div id="loading-overlay">
     <div class="spinner"></div>
     <div style="margin-top: 16px; font-weight: bold; font-size: 16px; color: var(--primary-color);">資料同步中，請稍候...</div>
@@ -189,9 +192,7 @@
         </div>
       </div>
       
-      <div id="report-warning-container" style="padding: 0 16px; margin-top: 12px;"></div>
-
-      <div style="padding: 0 16px; margin-bottom: 12px; font-size: 15px;"><strong>身分：</strong> <span id="report-id-text"></span></div>
+      <div style="padding: 0 16px; margin-top: 12px; margin-bottom: 12px; font-size: 15px;"><strong>身分：</strong> <span id="report-id-text"></span></div>
       
       <div style="padding: 0 16px;">
         <table class="report-table">
@@ -201,6 +202,9 @@
       </div>
       
       <div style="padding: 0 16px 16px 16px;">
+        <!-- 💡 雙態智能提醒標語：移至結算區塊的正上方 -->
+        <div id="report-warning-container" style="margin-bottom: 12px;"></div>
+
         <div style="background: #fff5f5; border: 1px solid #feb2b2; padding: 12px; border-radius: 6px; font-size: 15px; margin-bottom: 12px;">
           <div style="display:flex; justify-content:space-between; font-weight:bold; color:var(--quota-color);">
             <span>長照總額度佔用：</span>
@@ -227,7 +231,7 @@
     // ==========================================
     // ⬇️ 第一步：將您的 Google 試算表 ID 貼在下方 ⬇️
     // ==========================================
-    const GOOGLE_SHEET_ID = '1s3uu7OYB-Jsz5nYqNR-96zsrF26ofbMWjTL3bLbVoHA'; 
+    const GOOGLE_SHEET_ID = 'YOUR_GOOGLE_SHEET_ID_HERE'; 
 
     let database = {}; 
     let cart = [];
@@ -245,7 +249,6 @@
       }
     }
 
-    // 💡 加入了 Loading 動畫顯示邏輯
     async function syncData() {
       if(GOOGLE_SHEET_ID === 'YOUR_GOOGLE_SHEET_ID_HERE') {
         alert("工程師提醒：請先在程式碼中填入您的 Google 試算表 ID 喔！");
@@ -253,7 +256,7 @@
       }
       
       const loadingOverlay = document.getElementById('loading-overlay');
-      loadingOverlay.style.display = 'flex'; // 顯示讀取動畫
+      loadingOverlay.style.display = 'flex'; 
       document.getElementById('sync-status').innerText = '⏳ 正在從雲端抓取最新資料...';
       
       const url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/export?format=csv`;
@@ -270,7 +273,7 @@
         document.getElementById('sync-status').innerText = '❌ 同步失敗，請檢查網路或試算表權限。';
         alert('無法連接到 Google 試算表，請確認您的試算表已設定為「知道連結的人均可查看」。\n目前將繼續使用舊版離線資料。');
       } finally {
-        loadingOverlay.style.display = 'none'; // 隱藏讀取動畫
+        loadingOverlay.style.display = 'none'; 
       }
     }
 
@@ -489,7 +492,7 @@
               <div class="compare-grid">
                 <div class="compare-box ${cartItem.track === 'dis' ? 'selected-track-dis' : ''}" style="${cartItem.track !== 'dis' ? 'opacity: 0.5;' : ''}"><div class="box-title text-dis">身障</div><div class="amount">${pDis > 0 ? '$'+pDis.toLocaleString() : '-'}</div></div>
                 ${ltcAllowed ? `
-                  <div class="compare-box ${cartItem.track === 'ltc' ? 'selected-track-ltc' : ''}" style="${cartItem.track !== 'ltc' ? 'opacity: 0.5;' : ''}"><div class="box-title text-ltc">長照</div><div class="amount">${pLtc > 0 ? '$'+pLtc.toLocaleString() : '-'}</div></div>
+                  <div class="compare-box ${cartItem.track === 'ltc' ? 'selected-track-ltc' : ''}" style="${currentTrack !== 'ltc' ? 'opacity: 0.5;' : ''}"><div class="box-title text-ltc">長照</div><div class="amount">${pLtc > 0 ? '$'+pLtc.toLocaleString() : '-'}</div></div>
                   <div class="compare-box diff-box" style="${cartItem.track === 'ltc' || cartItem.track === 'dis' ? 'opacity: 1;' : 'opacity: 0.5;'}"><div class="box-title">差額</div><div class="amount">${formatDiff(block.diff)}</div></div>
                 ` : `<div class="compare-box forbidden" style="grid-column: span 2;"><div style="font-size:13px; font-weight:bold;">🚫 不給付</div></div>`}
               </div>
@@ -666,11 +669,14 @@
       document.getElementById('report-sum-ltc').innerText = `$${reportLtc.toLocaleString()}`;
       document.getElementById('report-sum-total').innerText = `$${(reportDis + reportLtc).toLocaleString()}`;
 
+      // 💡 雙態智能提醒標語邏輯
       const warnContainer = document.getElementById('report-warning-container');
       if (ltcSel.value !== 'none' && reportQuota > customQuota) {
-        warnContainer.innerHTML = `<div class="warning-banner" style="margin-bottom: 0;">⚠️ 此表僅供試算，長照已超出設定額度，實際金額以公文為主，超額需自費。</div>`;
+        // 超額模式（紅字警告）
+        warnContainer.innerHTML = `<div class="warning-banner" style="margin-bottom: 0;">⚠️ 【超額警告】長照已超出設定額度，超額部分需自費。實際金額以公文為主。</div>`;
       } else {
-        warnContainer.innerHTML = '';
+        // 常態模式（藍字免責提醒）
+        warnContainer.innerHTML = `<div class="info-banner" style="margin-bottom: 0;">💡 【試算提醒】此表僅供試算參考，實際核定補助金額以政府公文為主。</div>`;
       }
 
       document.getElementById('report-modal').style.display = 'flex';
@@ -678,39 +684,34 @@
     
     function closeReport() { document.getElementById('report-modal').style.display = 'none'; }
     
-    // 💡 魔法截圖技術：瞬間拉寬到電腦版比例 (700px) 再截圖
     function downloadScreenshot() {
       const reportElement = document.getElementById('report-content-id');
       const btnGroup = document.getElementById('report-btn-group');
       
       btnGroup.style.display = 'none';
       
-      // 記住原本的 CSS 狀態
       const originalMaxHeight = reportElement.style.maxHeight;
       const originalOverflow = reportElement.style.overflowY;
       const originalWidth = reportElement.style.width;
       const originalMaxWidth = reportElement.style.maxWidth;
       
-      // 強制將報表展開並拉寬，模擬桌面版 A4 紙的寬度
       reportElement.style.maxHeight = 'none';
       reportElement.style.overflowY = 'visible';
       reportElement.style.width = '700px';
       reportElement.style.maxWidth = '700px';
 
       html2canvas(reportElement, {
-        scale: 2, // 高畫質 2 倍率
+        scale: 2, 
         windowWidth: 700, 
         backgroundColor: "#ffffff", 
         useCORS: true 
       }).then(canvas => {
-        // 瞬間恢復原狀，使用者不會察覺
         reportElement.style.maxHeight = originalMaxHeight;
         reportElement.style.overflowY = originalOverflow;
         reportElement.style.width = originalWidth;
         reportElement.style.maxWidth = originalMaxWidth;
         btnGroup.style.display = 'block';
 
-        // 觸發下載
         const link = document.createElement('a');
         link.download = `補助試算報表_${new Date().getTime()}.png`;
         link.href = canvas.toDataURL('image/png');
