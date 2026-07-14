@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>新版 補助決策計算器 (醫療級防呆修復版)</title>
+  <title>新版 補助決策計算器 (寬框整數版)</title>
   
   <link rel="manifest" href="manifest.json">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -38,7 +38,9 @@
     .item-title-group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .item-title { font-size: 15px; font-weight: bold; color: var(--text-main); }
     .qty-control { display: flex; align-items: center; background: #edf2f7; padding: 4px 8px; border-radius: 6px; font-size: 13px; }
-    .qty-control input { width: 45px; border: 1px solid #cbd5e0; border-radius: 4px; padding: 2px 4px; text-align: center; margin: 0 4px; font-weight: bold; }
+    
+    /* 數量輸入框只設定 padding 等基礎樣式，寬度在 HTML 中行內設定以保證顯示效果 */
+    .qty-control input { border: 1px solid #cbd5e0; border-radius: 4px; padding: 2px 4px; text-align: center; margin: 0 4px; font-weight: bold; }
     
     .btn-delete { background: #fee2e2; border: 1px solid #fca5a5; color: var(--danger-color); font-size: 12px; font-weight:bold; cursor: pointer; padding: 4px 10px; border-radius: 4px; white-space: nowrap; }
     .btn-delete-group { background: #fff5f5; border: 1px solid #feb7b7; color: var(--danger-color); font-size: 12px; font-weight:bold; cursor: pointer; padding: 4px 10px; border-radius: 4px; }
@@ -109,7 +111,6 @@
 </head>
 <body>
 
-  <!-- 載入中遮罩 -->
   <div id="loading-overlay">
     <div class="spinner"></div>
     <div style="margin-top: 16px; font-weight: bold; font-size: 16px; color: var(--primary-color);">資料同步中，請稍候...</div>
@@ -119,11 +120,11 @@
     <div class="header">
       <span>📝 補助決策計算器</span>
       <div class="header-btns">
-        <button class="btn-action btn-sync" onclick="syncData()">🔄 資料更新</button>
+        <button class="btn-action btn-sync" onclick="syncData()">🔄 雲端更新</button>
         <button class="btn-action btn-report" onclick="openReport()">📄 報表</button>
         <button class="btn-action" onclick="clearAll()">清除</button>
       </div>
-      <div id="sync-status">目前使用本機離線資料 (請點擊資料更新)</div>
+      <div id="sync-status">目前使用本機離線資料 (請點擊雲端更新)</div>
     </div>
 
     <div class="section">
@@ -226,9 +227,10 @@
 
   <script>
     // ==========================================
-    // ⬇️ 第一步：將您的 Google 試算表 ID 貼在下方 ⬇️
+    // 🛡️ 已啟用字串混淆防護 (Obfuscation) 
     // ==========================================
-    const GOOGLE_SHEET_ID = '1s3uu7OYB-Jsz5nYqNR-96zsrF26ofbMWjTL3bLbVoHA'; 
+    const _p = ['qNR-96zs', 'WjTL3bLbVoHA', '1s3uu7OY', 'B-Jsz5nY', 'rF26ofbM'];
+    const GOOGLE_SHEET_ID = _p[2] + _p[3] + _p[0] + _p[4] + _p[1]; 
 
     let database = {}; 
     let cart = [];
@@ -242,12 +244,12 @@
         database = JSON.parse(cachedData);
         if(lastSync) document.getElementById('sync-status').innerText = `✅ 已載入離線資料 (上次更新: ${lastSync})`;
       } else {
-        document.getElementById('sync-status').innerText = '⚠️ 尚無資料，請點擊「資料更新」獲取補助資料';
+        document.getElementById('sync-status').innerText = '⚠️ 尚無資料，請點擊「雲端更新」獲取法規資料';
       }
     }
 
     async function syncData() {
-      if(GOOGLE_SHEET_ID === 'YOUR_GOOGLE_SHEET_ID_HERE') {
+      if(!GOOGLE_SHEET_ID || GOOGLE_SHEET_ID === 'YOUR_GOOGLE_SHEET_ID_HERE') {
         alert("工程師提醒：請先在程式碼中填入您的 Google 試算表 ID 喔！");
         return;
       }
@@ -274,7 +276,6 @@
       }
     }
 
-    // 💡 醫療級防呆 CSV 數值解析
     const parsePrice = (val) => {
         if (!val) return 0;
         const parsed = parseInt(val.replace(/,/g, ''), 10);
@@ -306,7 +307,6 @@
         if (!name) continue;
         let uid = ltcCode; if (!uid) uid = disCode ? 'D' + disCode : 'SYS_' + i;
         
-        // 確保 Group2 權限為嚴格的布林值
         let isGroup2Allowed = false;
         if (cols[10] && cols[10].trim().toUpperCase() === 'Y') {
             isGroup2Allowed = true;
@@ -335,7 +335,7 @@
        updateUI();
     }
 
-    // 💡 醫療級防呆：確保金額計算絕對不會回傳 NaN
+    // 💡 醫療級防呆：確保整數運算
     function calculatePotentialGrant(item, track, quantity) {
       const disStatus = document.getElementById('dis-status').value;
       const ltcStatus = document.getElementById('ltc-status').value;
@@ -352,14 +352,14 @@
         }
         if (item.pricingRule === 'LTC_FIXED') effectiveQty = 1;
       }
-      return (unitPrice * effectiveQty) || 0; 
+      return Math.round(unitPrice * effectiveQty) || 0; 
     }
 
     function calculateQuotaUsed(item, track, quantity) {
       if (track === 'ltc' && item.ltc && typeof item.ltc.class1 === 'number') {
         let effectiveQty = (typeof quantity === 'number' && !isNaN(quantity)) ? quantity : 1;
         if (item.pricingRule === 'LTC_FIXED') effectiveQty = 1;
-        return (item.ltc.class1 * effectiveQty) || 0;
+        return Math.round(item.ltc.class1 * effectiveQty) || 0;
       }
       return 0;
     }
@@ -372,7 +372,7 @@
     }
 
     function openCatalog() {
-      if(Object.keys(database).length === 0) { alert("請先點擊「🔄 資料更新」獲取補助資料！"); return; }
+      if(Object.keys(database).length === 0) { alert("請先點擊「🔄 雲端更新」獲取法規資料！"); return; }
       const listContainer = document.getElementById('catalog-list');
       document.getElementById('catalog-search').value = ''; listContainer.innerHTML = '';
       const ltcStatus = document.getElementById('ltc-status').value; 
@@ -417,7 +417,7 @@
         if (db.moduleGroup && !groupTracks[db.moduleGroup]) { groupTracks[db.moduleGroup] = 'none'; }
       });
       closeCatalog(); 
-      setTimeout(updateUI, 10); // 微小延遲確保 Modal 關閉後再渲染，避免畫面卡頓
+      setTimeout(updateUI, 10); 
     }
 
     function removeItem(uid) { cart = cart.filter(i => i.uid !== uid); updateUI(); }
@@ -430,11 +430,12 @@
     function changeETrack(uid, track) { cart.find(i => i.uid === uid).track = track; updateUI(); }
     function changeGroupTrack(groupId, track) { groupTracks[groupId] = track; updateUI(); }
     
+    // 💡 變更：退回 parseInt，確保只能填寫整數，防止手滑填錯小數點
     function updateQuantity(uid, qty) { 
       const item = cart.find(i => i.uid === uid); 
       if(item) { 
         const parsed = parseInt(qty, 10);
-        item.quantity = (isNaN(parsed) || parsed < 1) ? 1 : parsed; 
+        item.quantity = (isNaN(parsed) || parsed <= 0) ? 1 : parsed; 
         updateUI(); 
       } 
     }
@@ -470,7 +471,6 @@
         independentItems.forEach(cartItem => {
           const db = database[cartItem.id];
           
-          // 💡 醫療級防呆邏輯
           let ltcAllowed = false;
           if (ltcStatus !== 'none') {
               if (ltcGroup === '2' && db.isGroup2Allowed === false) ltcAllowed = false;
@@ -500,7 +500,6 @@
           displayBlocks.push({ type: 'group', groupId: groupId, items: items, diff: groupPLtc - groupPDis });
         }
 
-        // 安全排序
         displayBlocks.sort((a, b) => (Number(b.diff) || 0) - (Number(a.diff) || 0));
 
         let html = "";
@@ -526,10 +525,11 @@
             if(cartItem.track === 'dis') { sumDis += pDis; disItemCount += cartItem.quantity; } 
             if(cartItem.track === 'ltc' && ltcItemAllowed) { sumLtc += pLtc; ltcTotalQuota += pQuota; }
 
+            // 💡 移除了 step="any"，保留 width: 65px 寬框
             html += `
               <div class="item-card">
                 <div class="item-header">
-                  <div class="item-title-group"><span class="item-title">${db.name}</span><div class="qty-control">數量: <input type="number" min="1" value="${cartItem.quantity}" onchange="updateQuantity('${cartItem.uid}', this.value)"></div></div>
+                  <div class="item-title-group"><span class="item-title">${db.name}</span><div class="qty-control">數量: <input type="number" min="1" value="${cartItem.quantity}" onchange="updateQuantity('${cartItem.uid}', this.value)" style="width: 65px;"></div></div>
                   <button class="btn-delete" onclick="removeItem('${cartItem.uid}')">✖ 刪除</button>
                 </div>
                 
@@ -624,6 +624,7 @@
               const pLtc = ltcItemAllowed ? (calculatePotentialGrant(db, 'ltc', cartItem.quantity) || 0) : 0;
               const pQuota = ltcItemAllowed ? (calculateQuotaUsed(db, 'ltc', cartItem.quantity) || 0) : 0;
 
+              // 💡 移除了 step="any"，保留 width: 65px 寬框
               html += `
                 <div class="item-card" style="padding: 10px 12px; margin: 0 0 8px 0;">
                   <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
@@ -636,7 +637,7 @@
                   
                   <div style="margin-bottom: 8px;">
                     <div class="qty-control" style="display:inline-flex; padding: 2px 6px;">
-                      數量: <input type="number" min="1" value="${cartItem.quantity}" onchange="updateQuantity('${cartItem.uid}', this.value)" style="width: 40px;"> <span style="color: gray;">(${db.unit})</span>
+                      數量: <input type="number" min="1" value="${cartItem.quantity}" onchange="updateQuantity('${cartItem.uid}', this.value)" style="width: 65px;"> <span style="color: gray;">(${db.unit})</span>
                     </div>
                   </div>
 
