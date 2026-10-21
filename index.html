@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>新版 補助決策計算器 (V50 絕對網格對齊版)</title>
+  <title>新版 補助決策計算器 (V51 主次分層版)</title>
   
   <link rel="manifest" href="manifest.json">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -26,7 +26,7 @@
 
     .section { padding: 16px; border-bottom: 1px solid var(--border-color); background: white; }
     
-    /* 💡 V50 絕對 3x2 網格：強迫手機與電腦皆維持 3 欄並排 */
+    /* V51 主次分層網格：確保長照排第一列，身障排第二列 */
     .identity-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
     .grid-cell { display: flex; flex-direction: column; min-height: 48px; }
     .grid-cell label { display: block; font-size: 11px; font-weight: bold; margin-bottom: 4px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.5px;}
@@ -131,30 +131,15 @@
     <div class="section">
       <div class="identity-grid">
         
-        <!-- 第 1 列 -->
-        <div class="grid-cell">
-          <label>🟦 身障身分</label>
-          <select id="dis-status" onchange="updateUI()">
-            <option value="none">無資格</option><option value="general">一般戶</option><option value="midLow">中低收</option><option value="low">低收</option>
-          </select>
-        </div>
-        
+        <!-- =======================
+             第 1 列：長照專區 (主線任務)
+             ======================= -->
         <div class="grid-cell">
           <label>🟩 長照身分</label>
           <select id="ltc-status" onchange="updateUI()">
             <option value="none">無資格</option><option value="class3">第三類(一般)</option><option value="class2">第二類(中低)</option><option value="class1">第一類(低收)</option>
           </select>
         </div>
-        
-        <div class="grid-cell">
-          <div id="quota-col" style="display: none;">
-            <label>💰 長照額度</label>
-            <input type="number" id="custom-quota" class="quota-input" value="40000" step="100" onchange="updateUI()">
-          </div>
-        </div>
-
-        <!-- 第 2 列 -->
-        <div class="grid-cell"></div> <!-- 左下角固定留白，維持網格對齊 -->
         
         <div class="grid-cell">
           <div id="ltc-group-row" style="display: none;">
@@ -166,8 +151,25 @@
         </div>
         
         <div class="grid-cell">
+          <div id="quota-col" style="display: none;">
+            <label>💰 長照剩餘額度</label>
+            <input type="number" id="custom-quota" class="quota-input" value="40000" step="100" onchange="updateUI()">
+          </div>
+        </div>
+
+        <!-- =======================
+             第 2 列：身障專區 (支線任務)
+             ======================= -->
+        <div class="grid-cell" style="margin-top: 4px;">
+          <label>🟦 身障身分</label>
+          <select id="dis-status" onchange="updateUI()">
+            <option value="none">無資格</option><option value="general">一般戶</option><option value="midLow">中低收</option><option value="low">低收</option>
+          </select>
+        </div>
+        
+        <div class="grid-cell" style="margin-top: 4px;">
           <div id="dis-quota-row" style="display: none;">
-            <label style="color: #2b6cb0;">🟦 身障剩餘</label>
+            <label style="color: #2b6cb0;">🟦 身障剩餘項次</label>
             <select id="dis-quota" class="dis-quota-input" onchange="updateUI()">
               <option value="4">剩 4 項</option>
               <option value="3">剩 3 項</option>
@@ -177,6 +179,8 @@
             </select>
           </div>
         </div>
+
+        <div class="grid-cell" style="margin-top: 4px;"></div> <!-- 右下角固定留白，維持網格對齊 -->
 
       </div>
     </div>
