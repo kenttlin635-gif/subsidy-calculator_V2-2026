@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>新版 補助決策計算器 (V52 寬容排版優化版)</title>
+  <title>新版 補助決策計算器 (V53 完美對齊加寬版)</title>
   
   <link rel="manifest" href="manifest.json">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -26,10 +26,11 @@
 
     .section { padding: 16px; border-bottom: 1px solid var(--border-color); background: white; }
     
-    /* 💡 V52 排版優化：
-       1. 將原本的 3 等分改為 auto auto 1fr，讓選項能依照文字長度自動撐開，不再擁擠。
-       2. 恢復舒適的字體大小。 */
-    .identity-grid { display: grid; grid-template-columns: auto auto 1fr; gap: 10px; }
+    /* 💡 V53 排版優化：
+       1. 使用 3 欄等寬的 grid 確保所有項目絕對對齊
+       2. 第一列：長照身分 | 長照組別 | 長照額度
+       3. 第二列：身障身分 | (留白) | 身障項次 */
+    .identity-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
     .grid-cell { display: flex; flex-direction: column; min-height: 52px; }
     .grid-cell label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: var(--text-main); white-space: nowrap;}
     .grid-cell select, .grid-cell input[type="number"] { width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 14px; background-color: white; margin-bottom: 0; }
@@ -134,22 +135,24 @@
       <div class="identity-grid">
         
         <!-- =======================
-             第 1 列：長照主線與身分
+             第 1 列：長照主線
              ======================= -->
-        <!-- 左邊第 1 欄：身障身分 -->
-        <div class="grid-cell">
-          <label>🟦 身障身分</label>
-          <select id="dis-status" onchange="updateUI()">
-            <option value="none">無資格</option><option value="general">一般戶</option><option value="midLow">中低收</option><option value="low">低收</option>
-          </select>
-        </div>
-        
-        <!-- 中間第 2 欄：長照身分 -->
+        <!-- 左邊第 1 欄：長照身分 -->
         <div class="grid-cell">
           <label>🟩 長照身分</label>
           <select id="ltc-status" onchange="updateUI()">
             <option value="none">無資格</option><option value="class3">第三類(一般)</option><option value="class2">第二類(中低)</option><option value="class1">第一類(低收)</option>
           </select>
+        </div>
+        
+        <!-- 中間第 2 欄：長照組別 -->
+        <div class="grid-cell">
+          <div id="ltc-group-row" style="display: none;">
+            <label style="color: #276749;">🟩 長照組別</label>
+            <select id="ltc-group" class="group-selector" onchange="updateLtcGroup()">
+              <option value="1">第一組</option><option value="2">第二組(限項目)</option>
+            </select>
+          </div>
         </div>
         
         <!-- 右邊第 3 欄：長照剩餘額度 -->
@@ -161,20 +164,18 @@
         </div>
 
         <!-- =======================
-             第 2 列：附屬設定與限額
+             第 2 列：身障設定與限額
              ======================= -->
-        <!-- 左邊第 1 欄：身分附屬區 (空) -->
-        <div class="grid-cell"></div>
-        
-        <!-- 中間第 2 欄：長照組別 -->
+        <!-- 左邊第 1 欄：身障身分 -->
         <div class="grid-cell">
-          <div id="ltc-group-row" style="display: none;">
-            <label style="color: #276749;">🟩 長照組別</label>
-            <select id="ltc-group" class="group-selector" onchange="updateLtcGroup()">
-              <option value="1">第一組</option><option value="2">第二組(限項目)</option>
-            </select>
-          </div>
+          <label>🟦 身障身分</label>
+          <select id="dis-status" onchange="updateUI()">
+            <option value="none">無資格</option><option value="general">一般戶</option><option value="midLow">中低收</option><option value="low">低收</option>
+          </select>
         </div>
+
+        <!-- 中間第 2 欄：身分附屬區 (空，佔位留白對齊) -->
+        <div class="grid-cell"></div>
         
         <!-- 右邊第 3 欄：身障剩餘項次 -->
         <div class="grid-cell">
@@ -310,7 +311,6 @@
       loadingOverlay.style.display = 'flex'; 
       document.getElementById('sync-status').innerText = '⏳ 正在從雲端抓取最新資料...';
       
-      // 💡 移除中斷機制，順其自然抓資料
       const url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/export?format=csv`;
       try {
         const response = await fetch(url);
