@@ -728,7 +728,7 @@
         if (disStatus !== 'none') {
           document.getElementById('dis-quota-display').innerText = `${disItemCount} 項 / 剩餘 ${customDisQuota} 項`;
           if (disItemCount > customDisQuota) {
-            warnings.push(`⚠️ 警告：身障申請已超過設定之剩餘項次，超出的項目將無法獲得補助！`);
+            warnings.push(`⚠️ 警告：身障申請已超過設定之剩餘項次，請調整各項目申請管道！`);
             document.getElementById('dis-quota-display').style.color = 'var(--danger-color)';
           } else {
             document.getElementById('dis-quota-display').style.color = '';
