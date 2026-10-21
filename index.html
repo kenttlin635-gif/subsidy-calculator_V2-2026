@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>新版 補助決策計算器 (V46 空間優化版)</title>
+  <title>新版 補助決策計算器 (V49 對齊修復版)</title>
   
   <link rel="manifest" href="manifest.json">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -17,7 +17,7 @@
     * { box-sizing: border-box; font-family: "Microsoft JhengHei", sans-serif; }
     body { margin: 0; padding: 0; background-color: #a0aec0; display: flex; justify-content: center; }
 
-    .app-container { width: 100%; max-width: 480px; min-height: 100vh; background-color: var(--bg-color); position: relative; padding-bottom: 160px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+    .app-container { width: 100%; max-width: 600px; min-height: 100vh; background-color: var(--bg-color); position: relative; padding-bottom: 160px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
     .header { background-color: var(--primary-color); color: white; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; flex-wrap: wrap; gap: 8px;}
     .header-btns { display: flex; gap: 6px; }
     .btn-action { background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight:bold;}
@@ -25,8 +25,14 @@
     .btn-sync { background: #fefcbf; color: #c05621; }
 
     .section { padding: 16px; border-bottom: 1px solid var(--border-color); background: white; }
-    .identity-row { display: flex; gap: 12px; flex-wrap: wrap; } .identity-col { flex: 1; min-width: 140px; }
-    label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: var(--text-main); }
+    
+    .identity-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    @media (min-width: 480px) {
+      .identity-grid { grid-template-columns: 1fr 1fr 1fr; }
+    }
+    .identity-col { display: flex; flex-direction: column; }
+    
+    label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: var(--text-main); white-space: nowrap;}
     select, input[type="number"] { width: 100%; padding: 8px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 14px; background-color: white; margin-bottom: 8px; }
     .group-selector { background-color: #f0fff4; border: 2px solid #68d391; font-weight: bold; color: #276749; }
     .quota-input { border: 2px solid #feb2b2; font-weight: bold; color: #c53030; background-color: #fff5f5; }
@@ -75,7 +81,7 @@
     .theme-purple { background: #faf5ff; border-color: #d6bcfa; } .theme-purple .module-header { border-bottom-color: #e9d8fd; } .theme-purple .module-header span { color: #553c9a; } .theme-purple .module-control-panel { border-color: #e9d8fd; } .theme-purple .item-card { border-color: #e9d8fd; }
     .theme-orange { background: #fffaf0; border-color: #fbd38d; } .theme-orange .module-header { border-bottom-color: #feebc8; } .theme-orange .module-header span { color: #c05621; } .theme-orange .module-control-panel { border-color: #feebc8; } .theme-orange .item-card { border-color: #feebc8; }
 
-    .summary-footer { position: fixed; bottom: 0; width: 100%; max-width: 480px; background: white; border-top: 1px solid var(--border-color); padding: 12px 16px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 10; }
+    .summary-footer { position: fixed; bottom: 0; width: 100%; max-width: 600px; background: white; border-top: 1px solid var(--border-color); padding: 12px 16px; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 10; }
     .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: var(--text-main); }
     .summary-item { display: flex; justify-content: space-between; background: #f7fafc; padding: 6px 8px; border-radius: 4px; }
     .summary-total { grid-column: span 2; display: flex; justify-content: space-between; align-items: center; background: #fff5f5; border: 1px solid #fed7d7; padding: 8px 12px; border-radius: 6px; font-weight: bold; color: var(--danger-color); font-size: 16px; }
@@ -108,7 +114,6 @@
 </head>
 <body>
 
-  <!-- 載入中遮罩 -->
   <div id="loading-overlay">
     <div class="spinner"></div>
     <div style="margin-top: 16px; font-weight: bold; font-size: 16px; color: var(--primary-color);">資料同步中，請稍候...</div>
@@ -126,9 +131,9 @@
     </div>
 
     <div class="section">
-      <!-- 💡 V46 空間優化：合併為 3 個直行 (Columns) -->
-      <div class="identity-row">
-        <!-- 第 1 行：身障身分 -->
+      <div class="identity-grid">
+        
+        <!-- 第 1 欄：身障身分 -->
         <div class="identity-col">
           <label>🟦 身障身分</label>
           <select id="dis-status" onchange="updateUI()">
@@ -136,18 +141,24 @@
           </select>
         </div>
         
-        <!-- 第 2 行：長照身分與組別 -->
+        <!-- 第 2 欄：長照身分與組別 -->
         <div class="identity-col">
-          <label>🟩 長照身分</label>
-          <select id="ltc-status" onchange="updateUI()">
-            <option value="none">無資格</option><option value="class3">第三類(一般)</option><option value="class2">第二類(中低)</option><option value="class1">第一類(低收)</option>
-          </select>
-          <select id="ltc-group" class="group-selector" onchange="updateLtcGroup()" style="display: none;">
-            <option value="1">第一組</option><option value="2">第二組(限項目)</option>
-          </select>
+          <div>
+            <label>🟩 長照身分</label>
+            <select id="ltc-status" onchange="updateUI()">
+              <option value="none">無資格</option><option value="class3">第三類(一般)</option><option value="class2">第二類(中低)</option><option value="class1">第一類(低收)</option>
+            </select>
+          </div>
+          <!-- 💡 V49 修復：加入「長照組別」文字標籤，確保高度對齊 -->
+          <div id="ltc-group-row" style="display: none;">
+            <label style="color: #276749;">🟩 長照組別</label>
+            <select id="ltc-group" class="group-selector" onchange="updateLtcGroup()">
+              <option value="1">第一組</option><option value="2">第二組(限項目)</option>
+            </select>
+          </div>
         </div>
         
-        <!-- 第 3 行：額度限制區 (自動垂直堆疊) -->
+        <!-- 第 3 欄：額度限制區 -->
         <div class="identity-col">
           <div id="quota-col" style="display: none; margin-bottom: 8px;">
             <label>💰 長照剩餘額度</label>
@@ -155,7 +166,7 @@
           </div>
           
           <div id="dis-quota-row" style="display: none;">
-            <label style="color: #2b6cb0;">🟦 身障剩餘項次 (2年4項)</label>
+            <label style="color: #2b6cb0;">🟦 身障剩餘項次</label>
             <select id="dis-quota" class="dis-quota-input" onchange="updateUI()">
               <option value="4">剩餘 4 項</option>
               <option value="3">剩餘 3 項</option>
@@ -165,6 +176,7 @@
             </select>
           </div>
         </div>
+
       </div>
     </div>
 
@@ -469,9 +481,10 @@
       try {
         const ltcStatusEl = document.getElementById('ltc-status'), ltcGroupEl = document.getElementById('ltc-group'), disStatus = document.getElementById('dis-status').value;
         const ltcStatus = ltcStatusEl.value;
-        ltcGroupEl.style.display = (ltcStatus === 'none') ? 'none' : 'block';
         
-        // 💡 空間優化邏輯：由 Block 控制
+        // 💡 修正連動：不只顯示下拉選單，連同外層包住標題的 div 也要一起顯示/隱藏
+        document.getElementById('ltc-group-row').style.display = (ltcStatus === 'none') ? 'none' : 'block';
+        
         const quotaCol = document.getElementById('quota-col');
         quotaCol.style.display = (ltcStatus === 'none') ? 'none' : 'block';
         const customQuota = parseInt(document.getElementById('custom-quota').value) || 0;
