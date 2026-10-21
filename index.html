@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>新版 補助決策計算器 (V51 主次分層版)</title>
+  <title>新版 補助決策計算器 (V52 寬容排版優化版)</title>
   
   <link rel="manifest" href="manifest.json">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -26,11 +26,13 @@
 
     .section { padding: 16px; border-bottom: 1px solid var(--border-color); background: white; }
     
-    /* V51 主次分層網格：確保長照排第一列，身障排第二列 */
-    .identity-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-    .grid-cell { display: flex; flex-direction: column; min-height: 48px; }
-    .grid-cell label { display: block; font-size: 11px; font-weight: bold; margin-bottom: 4px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.5px;}
-    .grid-cell select, .grid-cell input[type="number"] { width: 100%; padding: 4px 2px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 13px; background-color: white; margin-bottom: 0; }
+    /* 💡 V52 排版優化：
+       1. 將原本的 3 等分改為 auto auto 1fr，讓選項能依照文字長度自動撐開，不再擁擠。
+       2. 恢復舒適的字體大小。 */
+    .identity-grid { display: grid; grid-template-columns: auto auto 1fr; gap: 10px; }
+    .grid-cell { display: flex; flex-direction: column; min-height: 52px; }
+    .grid-cell label { display: block; font-size: 13px; font-weight: bold; margin-bottom: 4px; color: var(--text-main); white-space: nowrap;}
+    .grid-cell select, .grid-cell input[type="number"] { width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 14px; background-color: white; margin-bottom: 0; }
     
     .group-selector { background-color: #f0fff4 !important; border: 2px solid #68d391 !important; font-weight: bold; color: #276749; }
     .quota-input { border: 2px solid #feb2b2 !important; font-weight: bold; color: #c53030; background-color: #fff5f5 !important; }
@@ -132,8 +134,17 @@
       <div class="identity-grid">
         
         <!-- =======================
-             第 1 列：長照專區 (主線任務)
+             第 1 列：長照主線與身分
              ======================= -->
+        <!-- 左邊第 1 欄：身障身分 -->
+        <div class="grid-cell">
+          <label>🟦 身障身分</label>
+          <select id="dis-status" onchange="updateUI()">
+            <option value="none">無資格</option><option value="general">一般戶</option><option value="midLow">中低收</option><option value="low">低收</option>
+          </select>
+        </div>
+        
+        <!-- 中間第 2 欄：長照身分 -->
         <div class="grid-cell">
           <label>🟩 長照身分</label>
           <select id="ltc-status" onchange="updateUI()">
@@ -141,6 +152,21 @@
           </select>
         </div>
         
+        <!-- 右邊第 3 欄：長照剩餘額度 -->
+        <div class="grid-cell">
+          <div id="quota-col" style="display: none;">
+            <label>💰 長照剩餘額度</label>
+            <input type="number" id="custom-quota" class="quota-input" value="40000" step="100" onchange="updateUI()">
+          </div>
+        </div>
+
+        <!-- =======================
+             第 2 列：附屬設定與限額
+             ======================= -->
+        <!-- 左邊第 1 欄：身分附屬區 (空) -->
+        <div class="grid-cell"></div>
+        
+        <!-- 中間第 2 欄：長照組別 -->
         <div class="grid-cell">
           <div id="ltc-group-row" style="display: none;">
             <label style="color: #276749;">🟩 長照組別</label>
@@ -150,37 +176,19 @@
           </div>
         </div>
         
+        <!-- 右邊第 3 欄：身障剩餘項次 -->
         <div class="grid-cell">
-          <div id="quota-col" style="display: none;">
-            <label>💰 長照剩餘額度</label>
-            <input type="number" id="custom-quota" class="quota-input" value="40000" step="100" onchange="updateUI()">
-          </div>
-        </div>
-
-        <!-- =======================
-             第 2 列：身障專區 (支線任務)
-             ======================= -->
-        <div class="grid-cell" style="margin-top: 4px;">
-          <label>🟦 身障身分</label>
-          <select id="dis-status" onchange="updateUI()">
-            <option value="none">無資格</option><option value="general">一般戶</option><option value="midLow">中低收</option><option value="low">低收</option>
-          </select>
-        </div>
-        
-        <div class="grid-cell" style="margin-top: 4px;">
           <div id="dis-quota-row" style="display: none;">
             <label style="color: #2b6cb0;">🟦 身障剩餘項次</label>
             <select id="dis-quota" class="dis-quota-input" onchange="updateUI()">
-              <option value="4">剩 4 項</option>
-              <option value="3">剩 3 項</option>
-              <option value="2">剩 2 項</option>
-              <option value="1">剩 1 項</option>
-              <option value="0">已滿(0)</option>
+              <option value="4">剩餘 4 項</option>
+              <option value="3">剩餘 3 項</option>
+              <option value="2">剩餘 2 項</option>
+              <option value="1">剩餘 1 項</option>
+              <option value="0">已無額度 (0項)</option>
             </select>
           </div>
         </div>
-
-        <div class="grid-cell" style="margin-top: 4px;"></div> <!-- 右下角固定留白，維持網格對齊 -->
 
       </div>
     </div>
@@ -302,6 +310,7 @@
       loadingOverlay.style.display = 'flex'; 
       document.getElementById('sync-status').innerText = '⏳ 正在從雲端抓取最新資料...';
       
+      // 💡 移除中斷機制，順其自然抓資料
       const url = `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/export?format=csv`;
       try {
         const response = await fetch(url);
@@ -314,7 +323,7 @@
         document.getElementById('sync-status').innerText = `✅ 同步成功！(最新版本: ${timeString})`;
       } catch (error) {
         document.getElementById('sync-status').innerText = '❌ 同步失敗，請檢查網路或試算表權限。';
-        alert('無法連接到 Google 試算表，請確認您的試算表已設定為「知道連結的人均可查看」。\n目前將繼續使用舊版離線資料。');
+        alert('無法連接到 Google 試算表，這可能是因為網路連線微弱或中斷。\n目前將繼續為您使用本機的離線資料庫。');
       } finally {
         loadingOverlay.style.display = 'none'; 
       }
